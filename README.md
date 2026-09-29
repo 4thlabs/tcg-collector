@@ -50,7 +50,7 @@ The default time, 12:00 UTC, comes from the publication times observed on 2026-0
 
 ## TimescaleDB
 
-`import` writes the archived price guides into PostgreSQL with [TimescaleDB](https://www.timescale.com/), through [TypeORM](https://typeorm.io/). On connection it applies the pending migrations: the first one creates the tables, then the `price` hypertable and its compression with [@timescaledb/core](https://github.com/timescale/timescaledb-ts). Entities are TypeORM entity schemas rather than decorated classes (and `@timescaledb/typeorm` is not used), because Node runs this TypeScript directly and does not support decorators.
+`import` writes the archived price guides into PostgreSQL with [TimescaleDB](https://www.timescale.com/), through [TypeORM](https://typeorm.io/). On connection it applies the pending migrations: the first one creates the tables, then the `price` hypertable and its compression, in plain SQL. Entities are TypeORM entity schemas rather than decorated classes, because Node runs this TypeScript directly and does not support decorators.
 
 The `imported_file` table records each imported day, so `import` only imports the new days and can run after every collection; on an empty database, it imports the whole archive. Each day is saved in one transaction. `--replay` imports everything again: rows are upserted, never duplicated.
 
