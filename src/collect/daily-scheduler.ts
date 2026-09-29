@@ -1,17 +1,20 @@
 // Runs a task once a day at a fixed time (UTC), without depending on cron.
+import type { Logger } from "../logging/logger-factory.ts";
 
 export class DailyScheduler {
   private readonly hour: number;
   private readonly minute: number;
   private readonly task: () => Promise<void>;
+  private readonly logger: Logger;
 
   /** at: UTC time formatted as "HH:MM". */
-  constructor(at: string, task: () => Promise<void>) {
+  constructor(at: string, task: () => Promise<void>, logger: Logger) {
     const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(at);
     if (!match) throw new Error(`Invalid time: "${at}" (expected HH:MM, in UTC)`);
     this.hour = Number(match[1]);
     this.minute = Number(match[2]);
     this.task = task;
+    this.logger = logger;
   }
 
   /** Next run strictly after "now". */
@@ -25,7 +28,7 @@ export class DailyScheduler {
   async runForever(): Promise<never> {
     for (;;) {
       const next = this.nextRun(new Date());
-      console.log(`Next collection: ${next.toISOString()}`);
+      this.logger.info(`Next collection: ${next.toISOString()}`);
       await new Promise((resolve) => setTimeout(resolve, next.getTime() - Date.now()));
       await this.runOnce();
     }
@@ -35,7 +38,7 @@ export class DailyScheduler {
     try {
       await this.task();
     } catch (error) {
-      console.error(`Collection failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(`Collection failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

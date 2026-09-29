@@ -41,7 +41,9 @@ node src/cli.ts schedule --at 12:00    # collect every day at 12:00 UTC, without
 node src/cli.ts --help
 ```
 
-Global options: `--data-dir` (default `data`), `--base-url`. Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `GAMES`, `COLLECT_AT`.
+Global options: `--data-dir` (default `data`), `--base-url`, `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `COLLECT_AT`.
+
+Logs go through [Winston](https://github.com/winstonjs/winston) to the console: `info` shows archived files and the summary of each collection, `warn` a file that failed, `debug` also the unchanged and absent files. `--log-format json` writes one JSON object per line, for a log collector.
 
 The default time, 12:00 UTC, comes from the publication times observed on 2026-09-29: price guide around 01:00 UTC, catalogues around 11:30 UTC.
 
@@ -80,6 +82,7 @@ src/storage/fingerprint-ledger.ts    JSON ledger (atomic writes)
 src/storage/snapshot-archive.ts      gzip archives
 src/collect/collector.ts             collection and deduplication logic
 src/collect/daily-scheduler.ts       daily run at a fixed time
+src/logging/logger-factory.ts        Winston loggers (text or JSON)
 ```
 
 Tests: `npm test`. Typecheck: `npm run typecheck`.

@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "commander": "^14.0.0",
-    "ky": "^2.1.0"
+    "ky": "^2.1.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

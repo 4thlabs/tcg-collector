@@ -7,5 +7,7 @@ services:
     environment:
       COLLECT_AT: "12:00"   # daily collection time, UTC
       GAMES: "all"          # or a list, e.g. "1,21" for Magic and Star Wars Unlimited
+      LOG_LEVEL: "info"     # error, warn, info or debug
+      LOG_FORMAT: "text"    # or "json" for a log collector
     volumes:
       - ./data:/app/data
