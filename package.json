@@ -1,0 +1,27 @@
+{
+  "name": "cardmarket-collector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Collecte quotidienne des fichiers publics Cardmarket (Price Guide et catalogues) pour tous les jeux, archivés en gzip et dédupliqués par empreinte.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "cardmarket-collector": "src/cli.ts"
+  },
+  "scripts": {
+    "collect": "node src/cli.ts collect",
+    "schedule": "node src/cli.ts schedule",
+    "games": "node src/cli.ts games",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
+  }
+}

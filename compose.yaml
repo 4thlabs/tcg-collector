@@ -1,0 +1,10 @@
+services:
+  collector:
+    build: .
+    image: cardmarket-collector
+    restart: unless-stopped
+    environment:
+      COLLECT_AT: "12:00"   # heure UTC de la collecte quotidienne
+      GAMES: "all"          # ou une liste, ex. "1,21" pour Magic et Star Wars Unlimited
+    volumes:
+      - ./data:/app/data
