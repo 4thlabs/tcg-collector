@@ -7,6 +7,7 @@ import { CardmarketClient, type RemoteVersion } from "../src/cardmarket/cardmark
 import { FeedKind, type FeedFile } from "../src/cardmarket/feed-file.ts";
 import { Collector } from "../src/collect/collector.ts";
 import { GameSelection } from "../src/collect/game-selection.ts";
+import { LoggerFactory } from "../src/logging/logger-factory.ts";
 import { FingerprintLedger } from "../src/storage/fingerprint-ledger.ts";
 import { SnapshotArchive } from "../src/storage/snapshot-archive.ts";
 
@@ -31,7 +32,7 @@ async function setup() {
   const dir = await mkdtemp(join(tmpdir(), "collector-"));
   const client = new FakeClient();
   const run = async (day: string) => {
-    const collector = new Collector(client, await FingerprintLedger.open(join(dir, "ledger.json")), new SnapshotArchive(dir), [FeedKind.priceGuide]);
+    const collector = new Collector(client, await FingerprintLedger.open(join(dir, "ledger.json")), new SnapshotArchive(dir), LoggerFactory.silent(), [FeedKind.priceGuide]);
     return collector.collect(GameSelection.parse("1,21"), new Date(`${day}T12:00:00Z`));
   };
   const archives = () => readdir(join(dir, "price_guide", "21"));

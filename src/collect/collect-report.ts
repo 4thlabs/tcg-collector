@@ -38,15 +38,15 @@ export class CollectReport {
     return this.results.filter((r) => r.outcome === "archived").reduce((sum, r) => sum + r.bytes, 0);
   }
 
+  /** One line, so it stays a single entry in JSON logs; each failure is already logged on its own. */
   summary(): string {
     const seconds = Math.round((Date.now() - this.startedAt) / 1000);
-    const lines = [
-      `Collection finished in ${seconds} s:`,
-      `  ${this.count("archived")} archived (${(this.archivedBytes / 1e6).toFixed(1)} MB compressed)`,
-      `  ${this.count("unchanged")} unchanged (same ETag), ${this.count("same-content")} regenerated without changes`,
-      `  ${this.count("absent")} absent, ${this.count("failed")} failed`,
-    ];
-    for (const failure of this.failures) lines.push(`  failed ${failure.key}: ${failure.error}`);
-    return lines.join("\n");
+    return [
+      `Collection finished in ${seconds} s: ${this.count("archived")} archived (${(this.archivedBytes / 1e6).toFixed(1)} MB compressed)`,
+      `${this.count("unchanged")} unchanged (same ETag)`,
+      `${this.count("same-content")} regenerated without changes`,
+      `${this.count("absent")} absent`,
+      `${this.count("failed")} failed`,
+    ].join(", ");
   }
 }

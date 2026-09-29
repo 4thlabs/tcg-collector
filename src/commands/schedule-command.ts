@@ -31,11 +31,13 @@ export class ScheduleCommand {
       .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
       .option("--run-now", "also run a collection immediately on start", false)
       .action(async (options: ScheduleOptions) => {
+        const app = this.app();
         const games = GameSelection.parse(options.games);
-        const scheduler = new DailyScheduler(options.at, async () => {
-          const report = await (await this.app().createCollector()).collect(games);
-          console.log(report.summary());
-        });
+        const collect = async () => {
+          const report = await (await app.createCollector()).collect(games);
+          app.logger.info(report.summary());
+        };
+        const scheduler = new DailyScheduler(options.at, collect, app.logger);
         if (options.runNow) await scheduler.runOnce();
         await scheduler.runForever();
       });

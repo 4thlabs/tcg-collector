@@ -1,6 +1,7 @@
 // Collection: for each game and file type, archives today's version when its content changed.
 import type { CardmarketClient } from "../cardmarket/cardmarket-client.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
+import type { Logger } from "../logging/logger-factory.ts";
 import { ContentFingerprint } from "../storage/content-fingerprint.ts";
 import type { FingerprintLedger } from "../storage/fingerprint-ledger.ts";
 import type { SnapshotArchive } from "../storage/snapshot-archive.ts";
@@ -11,17 +12,20 @@ export class Collector {
   private readonly client: CardmarketClient;
   private readonly ledger: FingerprintLedger;
   private readonly archive: SnapshotArchive;
+  private readonly logger: Logger;
   private readonly kinds: readonly FeedKind[];
 
-  constructor(client: CardmarketClient, ledger: FingerprintLedger, archive: SnapshotArchive, kinds = FeedKind.all) {
+  constructor(client: CardmarketClient, ledger: FingerprintLedger, archive: SnapshotArchive, logger: Logger, kinds = FeedKind.all) {
     this.client = client;
     this.ledger = ledger;
     this.archive = archive;
+    this.logger = logger;
     this.kinds = kinds;
   }
 
   /** Sequential collection (one file at a time, to stay gentle with Cardmarket). */
   async collect(games: GameSelection, now = new Date()): Promise<CollectReport> {
+    this.logger.info(`Collection started for ${games.ids.length} game ids`);
     const report = new CollectReport();
     for (const idGame of games.ids) {
       for (const kind of this.kinds) {
@@ -29,9 +33,13 @@ export class Collector {
         try {
           const { outcome, bytes } = await this.collectFile(file, now);
           report.add(file.key, outcome, bytes);
-          if (outcome === "archived") console.log(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
+          // Archives are the interesting events; the rest is only visible at debug level.
+          if (outcome === "archived") this.logger.info(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
+          else this.logger.debug(`${outcome} ${file.key}`);
         } catch (error) {
-          report.add(file.key, "failed", 0, error instanceof Error ? error.message : String(error));
+          const message = error instanceof Error ? error.message : String(error);
+          report.add(file.key, "failed", 0, message);
+          this.logger.warn(`failed ${file.key}: ${message}`);
         }
       }
       // The ledger is saved after each game: an interrupted collection keeps what it already got.

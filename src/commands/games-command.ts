@@ -1,4 +1,5 @@
 // games: lists the games published by Cardmarket and their file sizes, without downloading anything.
+// The table is the command's output, not a log, so it goes straight to stdout.
 import { Command } from "commander";
 import type { App } from "../app.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
