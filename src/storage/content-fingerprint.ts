@@ -1,10 +1,10 @@
-// Empreinte du contenu utile d'un fichier Cardmarket.
+// Fingerprint of the useful content of a Cardmarket file.
 import { createHash } from "node:crypto";
 
 /**
- * Cardmarket régénère ses fichiers en changeant le champ « createdAt » en tête du JSON :
- * le hash du fichier entier change alors même si aucune carte ni aucun prix n'a bougé.
- * L'empreinte est donc calculée sur le JSON privé de ce champ.
+ * Cardmarket regenerates its files with a new "createdAt" field at the top of the JSON:
+ * the hash of the whole file then changes even when no card or price moved.
+ * The fingerprint is therefore computed on the JSON without that field.
  */
 export class ContentFingerprint {
   private static readonly volatileFields = ["createdAt"];

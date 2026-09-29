@@ -1,6 +1,6 @@
-// Les trois fichiers publics que Cardmarket publie pour chaque jeu.
+// The three public files Cardmarket publishes for each game.
 
-/** Type de fichier : Price Guide, catalogue des cartes à l'unité, catalogue des autres produits. */
+/** File type: price guide, single-card catalogue, catalogue of other products. */
 export class FeedKind {
   static readonly priceGuide = new FeedKind("price_guide", "priceGuide");
   static readonly singles = new FeedKind("products_singles", "productList");
@@ -17,17 +17,17 @@ export class FeedKind {
 
   static byName(name: string): FeedKind {
     const kind = FeedKind.all.find((k) => k.name === name);
-    if (!kind) throw new Error(`Type de fichier inconnu : ${name} (attendus : ${FeedKind.all.map((k) => k.name).join(", ")})`);
+    if (!kind) throw new Error(`Unknown file type: ${name} (expected: ${FeedKind.all.map((k) => k.name).join(", ")})`);
     return kind;
   }
 
-  /** Chemin relatif sur le serveur Cardmarket, ex. « priceGuide/price_guide_21.json ». */
+  /** Path relative to the Cardmarket server, e.g. "priceGuide/price_guide_21.json". */
   remotePath(idGame: number): string {
     return `${this.folder}/${this.name}_${idGame}.json`;
   }
 }
 
-/** Un fichier précis : un type de fichier pour un jeu donné. */
+/** One specific file: a file type for a given game. */
 export class FeedFile {
   readonly kind: FeedKind;
   readonly idGame: number;
@@ -37,7 +37,7 @@ export class FeedFile {
     this.idGame = idGame;
   }
 
-  /** Clé stable, utilisée dans le registre des empreintes et dans les logs. */
+  /** Stable key, used in the fingerprint ledger and in logs. */
   get key(): string {
     return `${this.kind.name}_${this.idGame}`;
   }

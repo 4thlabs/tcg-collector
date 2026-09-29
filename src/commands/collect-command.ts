@@ -1,4 +1,4 @@
-// collect : une collecte immédiate, puis sortie (code 1 si un fichier a échoué).
+// collect: one immediate collection, then exit (code 1 if a file failed).
 import { Command } from "commander";
 import type { App } from "../app.ts";
 import { GameSelection } from "../collect/game-selection.ts";
@@ -13,8 +13,8 @@ export class CollectCommand {
   register(program: Command): void {
     program
       .command("collect")
-      .description("collecte une fois les fichiers de tous les jeux demandés")
-      .option("-g, --games <ids>", "jeux à collecter : « all » ou une liste « 1,6,21 »", process.env.GAMES ?? "all")
+      .description("collect the files of the requested games once")
+      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
       .action(async (options: { games: string }) => {
         const report = await (await this.app().createCollector()).collect(GameSelection.parse(options.games));
         console.log(report.summary());

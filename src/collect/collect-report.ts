@@ -1,13 +1,13 @@
-// Bilan d'une collecte : ce qui s'est passé pour chaque fichier.
+// Collection summary: what happened to each file.
 
 export type Outcome =
-  /** Nouvelle version archivée. */
+  /** New version archived. */
   | "archived"
-  /** Même ETag que la dernière fois : rien téléchargé. */
+  /** Same ETag as last time: nothing downloaded. */
   | "unchanged"
-  /** Fichier régénéré mais contenu utile identique : téléchargé, pas archivé. */
+  /** File regenerated but useful content identical: downloaded, not archived. */
   | "same-content"
-  /** Le fichier n'existe pas pour ce jeu. */
+  /** The file does not exist for this game. */
   | "absent"
   | "failed";
 
@@ -41,12 +41,12 @@ export class CollectReport {
   summary(): string {
     const seconds = Math.round((Date.now() - this.startedAt) / 1000);
     const lines = [
-      `Collecte terminée en ${seconds} s :`,
-      `  ${this.count("archived")} archivés (${(this.archivedBytes / 1e6).toFixed(1)} Mo compressés)`,
-      `  ${this.count("unchanged")} inchangés (même ETag), ${this.count("same-content")} régénérés sans changement`,
-      `  ${this.count("absent")} absents, ${this.count("failed")} en échec`,
+      `Collection finished in ${seconds} s:`,
+      `  ${this.count("archived")} archived (${(this.archivedBytes / 1e6).toFixed(1)} MB compressed)`,
+      `  ${this.count("unchanged")} unchanged (same ETag), ${this.count("same-content")} regenerated without changes`,
+      `  ${this.count("absent")} absent, ${this.count("failed")} failed`,
     ];
-    for (const failure of this.failures) lines.push(`  échec ${failure.key} : ${failure.error}`);
+    for (const failure of this.failures) lines.push(`  failed ${failure.key}: ${failure.error}`);
     return lines.join("\n");
   }
 }

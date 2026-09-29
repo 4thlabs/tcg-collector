@@ -1,14 +1,14 @@
 {
-  "name": "cardmarket-collector",
+  "name": "tcg-collector",
   "version": "0.1.0",
   "private": true,
-  "description": "Collecte quotidienne des fichiers publics Cardmarket (Price Guide et catalogues) pour tous les jeux, archivés en gzip et dédupliqués par empreinte.",
+  "description": "Daily collection of Cardmarket public files (price guide and catalogues) for every game, archived as gzip and deduplicated by fingerprint.",
   "type": "module",
   "engines": {
     "node": ">=22.18"
   },
   "bin": {
-    "cardmarket-collector": "src/cli.ts"
+    "tcg-collector": "src/cli.ts"
   },
   "scripts": {
     "collect": "node src/cli.ts collect",

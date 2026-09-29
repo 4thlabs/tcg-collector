@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   test:
-    name: Types et tests (Node ${{ matrix.node }})
+    name: Typecheck and tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 22.18 : première version qui exécute le TypeScript sans option ; 24 : version de l'image Docker.
+        # 22.18: first version that runs TypeScript without flags; 24: the Docker image version.
         node: ["22.18", "24"]
     steps:
       - uses: actions/checkout@v5
@@ -27,7 +27,7 @@ jobs:
       - run: npm test
 
   image:
-    name: Image Docker
+    name: Docker image
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
 
-      - name: Construire l'image
+      - name: Build the image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -48,11 +48,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Vérifier que la CLI démarre dans l'image
+      - name: Check that the CLI starts in the image
         run: docker run --rm tcg-collector:ci node src/cli.ts --help
 
-      # Publication sur GitHub Container Registry, seulement depuis main.
-      - name: Connexion à ghcr.io
+      # Publish to GitHub Container Registry, from main only.
+      - name: Log in to ghcr.io
         if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
@@ -60,7 +60,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publier l'image
+      - name: Publish the image
         if: github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:

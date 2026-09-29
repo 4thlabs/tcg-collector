@@ -1,4 +1,4 @@
-// Collecte : pour chaque jeu et chaque type de fichier, archive la version du jour si son contenu a changé.
+// Collection: for each game and file type, archives today's version when its content changed.
 import type { CardmarketClient } from "../cardmarket/cardmarket-client.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
 import { ContentFingerprint } from "../storage/content-fingerprint.ts";
@@ -20,7 +20,7 @@ export class Collector {
     this.kinds = kinds;
   }
 
-  /** Collecte séquentielle (un fichier à la fois, pour rester discret envers Cardmarket). */
+  /** Sequential collection (one file at a time, to stay gentle with Cardmarket). */
   async collect(games: GameSelection, now = new Date()): Promise<CollectReport> {
     const report = new CollectReport();
     for (const idGame of games.ids) {
@@ -29,12 +29,12 @@ export class Collector {
         try {
           const { outcome, bytes } = await this.collectFile(file, now);
           report.add(file.key, outcome, bytes);
-          if (outcome === "archived") console.log(`archivé ${file.key} (${(bytes / 1e6).toFixed(2)} Mo)`);
+          if (outcome === "archived") console.log(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
         } catch (error) {
           report.add(file.key, "failed", 0, error instanceof Error ? error.message : String(error));
         }
       }
-      // Le registre est sauvegardé après chaque jeu : une collecte interrompue garde ce qui est acquis.
+      // The ledger is saved after each game: an interrupted collection keeps what it already got.
       await this.ledger.save();
     }
     return report;

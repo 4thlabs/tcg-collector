@@ -1,85 +1,85 @@
-# cardmarket-collector
+# tcg-collector
 
-Collecte chaque jour les fichiers publics de Cardmarket pour tous les jeux :
+Collects Cardmarket's public files for every game, every day:
 
-| Fichier | Contenu | Taille (Magic) |
+| File | Content | Size (Magic) |
 |---|---|---|
-| `price_guide_N.json` | prix du jour (low, trend, avg1/7/30, versions foil) | 26 Mo |
-| `products_singles_N.json` | catalogue des cartes à l'unité | 20 Mo |
-| `products_nonsingles_N.json` | catalogue des autres produits (boosters, boîtes…) | 1 Mo |
+| `price_guide_N.json` | today's prices (low, trend, avg1/7/30, foil versions) | 26 MB |
+| `products_singles_N.json` | single-card catalogue | 20 MB |
+| `products_nonsingles_N.json` | catalogue of other products (boosters, boxes…) | 1 MB |
 
-`N` est l'identifiant du jeu chez Cardmarket (1 = Magic, 21 = Star Wars Unlimited). Au 2026-09-29, 22 jeux publient des fichiers (1 à 25, sauf 4 et 14) : 165 Mo au total, 17 Mo une fois compressés.
+`N` is Cardmarket's game id (1 = Magic, 21 = Star Wars Unlimited). As of 2026-09-29, 22 games publish files (1 to 25, except 4 and 14): 165 MB in total, 17 MB once compressed.
 
-## Ce qui est archivé
+## What gets archived
 
-Pour chaque fichier, à chaque collecte :
+For each file, on every collection:
 
-1. **Requête HEAD** : si l'ETag est le même que la dernière fois, le fichier n'a pas été régénéré. Rien n'est téléchargé.
-2. Sinon, téléchargement et **empreinte SHA-256 du contenu sans le champ `createdAt`** (Cardmarket le change à chaque régénération, même quand aucune donnée ne bouge).
-3. Si l'empreinte est identique à la dernière archive, rien n'est écrit. Sinon, le fichier brut est archivé en gzip.
+1. **HEAD request**: if the ETag is the same as last time, the file was not regenerated. Nothing is downloaded.
+2. Otherwise, download and compute a **SHA-256 fingerprint of the content without the `createdAt` field** (Cardmarket changes it on every regeneration, even when no data moved).
+3. If the fingerprint matches the last archive, nothing is written. Otherwise, the raw file is archived as gzip.
 
-Les catalogues ne sont donc archivés que lorsqu'ils changent vraiment. Estimation de stockage : moins de 7 Go par an pour tous les jeux.
+Catalogues are therefore archived only when they really change. Estimated storage: under 7 GB per year for every game.
 
 ```
 data/
-  ledger.json                             dernière version vue de chaque fichier (ETag, empreinte, dates)
-  archive/<type>/<jeu>/<AAAA-MM-JJ>.json.gz
+  ledger.json                             last version seen for each file (ETag, fingerprint, dates)
+  archive/<type>/<game>/<YYYY-MM-DD>.json.gz
 ```
 
-Pour lire une archive : `gunzip -c data/archive/price_guide/21/2026-09-29.json.gz | jq .`
+To read an archive: `gunzip -c data/archive/price_guide/21/2026-09-29.json.gz | jq .`
 
-## Utilisation
+## Usage
 
-Node 22.18 ou plus récent (exécute directement le TypeScript).
+Node 22.18 or later (runs TypeScript directly).
 
 ```
 npm install
-node src/cli.ts games                  # jeux disponibles et taille des fichiers
-node src/cli.ts collect                # une collecte, tous les jeux
-node src/cli.ts collect --games 1,21   # seulement Magic et Star Wars Unlimited
-node src/cli.ts schedule --at 12:00    # collecte chaque jour à 12:00 UTC, sans s'arrêter
+node src/cli.ts games                  # available games and file sizes
+node src/cli.ts collect                # one collection, every game
+node src/cli.ts collect --games 1,21   # Magic and Star Wars Unlimited only
+node src/cli.ts schedule --at 12:00    # collect every day at 12:00 UTC, without stopping
 node src/cli.ts --help
 ```
 
-Options communes : `--data-dir` (défaut `data`), `--base-url`. Variables d'environnement équivalentes : `DATA_DIR`, `CARDMARKET_BASE_URL`, `GAMES`, `COLLECT_AT`.
+Global options: `--data-dir` (default `data`), `--base-url`. Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `GAMES`, `COLLECT_AT`.
 
-L'heure par défaut, 12:00 UTC, vient des heures de publication observées le 2026-09-29 : Price Guide vers 01:00 UTC, catalogues vers 11:30 UTC.
+The default time, 12:00 UTC, comes from the publication times observed on 2026-09-29: price guide around 01:00 UTC, catalogues around 11:30 UTC.
 
 ## Docker
 
-L'image est construite et publiée par la CI sur `ghcr.io/4thlabs/tcg-collector` (tags `latest` et `sha-<commit>`) à chaque commit sur `main`.
+The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
 ```
-docker compose pull && docker compose up -d   # image publiée
-docker compose up -d --build                  # ou construite en local
+docker compose pull && docker compose up -d   # published image
+docker compose up -d --build                  # or build locally
 docker compose logs -f
 ```
 
-Si le paquet ghcr.io est privé, se connecter d'abord : `docker login ghcr.io` (jeton GitHub avec le droit `read:packages`).
+If the ghcr.io package is private, log in first: `docker login ghcr.io` (GitHub token with the `read:packages` scope).
 
-Le conteneur collecte au démarrage puis chaque jour à `COLLECT_AT` (UTC), et redémarre tout seul. Les archives sont dans `./data` sur l'hôte. Relancer le conteneur ne crée pas de doublon : le registre saute les fichiers déjà archivés.
+The container collects on start, then every day at `COLLECT_AT` (UTC), and restarts on its own. Archives are in `./data` on the host. Restarting the container creates no duplicates: the ledger skips files already archived.
 
 ## CI
 
-`.github/workflows/ci.yml`, sur chaque PR et chaque commit sur `main` :
+`.github/workflows/ci.yml`, on every PR and every commit to `main`:
 
-1. vérification des types et tests, sous Node 22.18 et 24 ;
-2. construction de l'image Docker et vérification que la CLI y démarre ;
-3. sur `main` uniquement : publication de l'image sur ghcr.io.
+1. typecheck and tests, on Node 22.18 and 24;
+2. Docker image build, and a check that the CLI starts in it;
+3. on `main` only: publication of the image to ghcr.io.
 
 ## Code
 
 ```
-src/cli.ts                         point d'entrée Commander
-src/app.ts                         assemblage des dépendances
-src/commands/                      une classe par commande (collect, schedule, games)
-src/cardmarket/feed-file.ts        types de fichiers et chemins sur le serveur
-src/cardmarket/cardmarket-client.ts  HEAD / GET via ky (nouvelles tentatives, délai max)
-src/storage/content-fingerprint.ts   empreinte sans createdAt
-src/storage/fingerprint-ledger.ts    registre JSON (écriture atomique)
-src/storage/snapshot-archive.ts      archives gzip
-src/collect/collector.ts           logique de collecte et de déduplication
-src/collect/daily-scheduler.ts     exécution quotidienne à heure fixe
+src/cli.ts                           Commander entry point
+src/app.ts                           dependency wiring
+src/commands/                        one class per command (collect, schedule, games)
+src/cardmarket/feed-file.ts          file types and server paths
+src/cardmarket/cardmarket-client.ts  HEAD / GET through ky (retries, timeout)
+src/storage/content-fingerprint.ts   fingerprint without createdAt
+src/storage/fingerprint-ledger.ts    JSON ledger (atomic writes)
+src/storage/snapshot-archive.ts      gzip archives
+src/collect/collector.ts             collection and deduplication logic
+src/collect/daily-scheduler.ts       daily run at a fixed time
 ```
 
-Tests : `npm test`. Vérification des types : `npm run typecheck`.
+Tests: `npm test`. Typecheck: `npm run typecheck`.

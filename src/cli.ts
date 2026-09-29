@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Point d'entrée : node src/cli.ts <commande> [options]
+// Entry point: node src/cli.ts <command> [options]
 import { Command } from "commander";
 import { App } from "./app.ts";
 import { CardmarketClient } from "./cardmarket/cardmarket-client.ts";
@@ -12,12 +12,12 @@ class Cli {
 
   constructor() {
     this.program
-      .name("cardmarket-collector")
-      .description("Collecte quotidienne des fichiers publics Cardmarket (Price Guide et catalogues)")
-      .option("-d, --data-dir <dossier>", "dossier des archives et du registre", process.env.DATA_DIR ?? "data")
-      .option("--base-url <url>", "adresse des fichiers Cardmarket", process.env.CARDMARKET_BASE_URL ?? CardmarketClient.defaultBaseUrl);
+      .name("tcg-collector")
+      .description("Daily collection of Cardmarket's public files (price guide and catalogues)")
+      .option("-d, --data-dir <folder>", "folder for the archives and the ledger", process.env.DATA_DIR ?? "data")
+      .option("--base-url <url>", "base URL of the Cardmarket files", process.env.CARDMARKET_BASE_URL ?? CardmarketClient.defaultBaseUrl);
 
-    // Les commandes lisent les options globales au moment de s'exécuter, après l'analyse de la ligne de commande.
+    // Commands read the global options when they run, after the command line has been parsed.
     const app = () => new App(this.program.opts<{ dataDir: string; baseUrl: string }>());
     for (const command of [new CollectCommand(app), new ScheduleCommand(app), new GamesCommand(app)]) command.register(this.program);
   }
@@ -30,6 +30,6 @@ class Cli {
 try {
   await new Cli().run(process.argv);
 } catch (error) {
-  console.error(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 }
