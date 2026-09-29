@@ -1,4 +1,4 @@
-// Archive des fichiers collectés, compressés en gzip, rangés par type, jeu et jour.
+// Archive of the collected files, gzip-compressed, organised by type, game and day.
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -19,12 +19,12 @@ export class SnapshotArchive {
     this.root = root;
   }
 
-  /** Chemin d'une archive : <racine>/<type>/<jeu>/<AAAA-MM-JJ>.json.gz */
+  /** Archive path: <root>/<type>/<game>/<YYYY-MM-DD>.json.gz */
   pathOf(file: FeedFile, day: string): string {
     return join(this.root, file.kind.name, String(file.idGame), `${day}.json.gz`);
   }
 
-  /** Écrit le fichier brut compressé ; une nouvelle collecte le même jour remplace l'archive du jour. */
+  /** Writes the compressed raw file; a new collection on the same day replaces that day's archive. */
   async store(file: FeedFile, day: string, body: Buffer): Promise<StoredSnapshot> {
     const path = this.pathOf(file, day);
     const compressed = await gzipAsync(body, { level: constants.Z_BEST_COMPRESSION });

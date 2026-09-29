@@ -10,7 +10,7 @@ import { GameSelection } from "../src/collect/game-selection.ts";
 import { FingerprintLedger } from "../src/storage/fingerprint-ledger.ts";
 import { SnapshotArchive } from "../src/storage/snapshot-archive.ts";
 
-/** Faux Cardmarket : un seul fichier publié, dont on fait varier l'ETag et le contenu. */
+/** Fake Cardmarket: a single published file whose ETag and content can be changed. */
 class FakeClient extends CardmarketClient {
   etag = "a";
   createdAt = "2026-09-28";
@@ -38,7 +38,7 @@ async function setup() {
   return { client, run, archives };
 }
 
-test("première collecte : archive le fichier publié, ignore le jeu absent", async () => {
+test("first collection: archives the published file, skips the absent game", async () => {
   const { run, archives } = await setup();
   const report = await run("2026-09-28");
   assert.equal(report.count("archived"), 1);
@@ -46,7 +46,7 @@ test("première collecte : archive le fichier publié, ignore le jeu absent", as
   assert.deepEqual(await archives(), ["2026-09-28.json.gz"]);
 });
 
-test("même ETag : rien n'est téléchargé", async () => {
+test("same ETag: nothing is downloaded", async () => {
   const { client, run } = await setup();
   await run("2026-09-28");
   const report = await run("2026-09-29");
@@ -54,7 +54,7 @@ test("même ETag : rien n'est téléchargé", async () => {
   assert.equal(client.downloads, 1);
 });
 
-test("fichier régénéré sans changement de contenu : téléchargé mais pas archivé", async () => {
+test("file regenerated with the same content: downloaded but not archived", async () => {
   const { client, run, archives } = await setup();
   await run("2026-09-28");
   client.etag = "b";
@@ -64,7 +64,7 @@ test("fichier régénéré sans changement de contenu : téléchargé mais pas a
   assert.deepEqual(await archives(), ["2026-09-28.json.gz"]);
 });
 
-test("prix modifié : nouvelle archive datée du jour", async () => {
+test("changed price: new archive dated today", async () => {
   const { client, run, archives } = await setup();
   await run("2026-09-28");
   client.etag = "c";

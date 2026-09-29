@@ -1,11 +1,11 @@
 services:
   collector:
-    # Image publiée par la CI à chaque commit sur main ; « build » sert de repli pour construire en local.
+    # Image published by the CI on every commit to main; "build" is the fallback to build locally.
     image: ghcr.io/4thlabs/tcg-collector:latest
     build: .
     restart: unless-stopped
     environment:
-      COLLECT_AT: "12:00"   # heure UTC de la collecte quotidienne
-      GAMES: "all"          # ou une liste, ex. "1,21" pour Magic et Star Wars Unlimited
+      COLLECT_AT: "12:00"   # daily collection time, UTC
+      GAMES: "all"          # or a list, e.g. "1,21" for Magic and Star Wars Unlimited
     volumes:
       - ./data:/app/data

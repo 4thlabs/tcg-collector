@@ -1,15 +1,15 @@
-// Registre de la dernière version archivée de chaque fichier, persisté en JSON.
+// Ledger of the last archived version of each file, persisted as JSON.
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export interface LedgerEntry {
-  /** ETag S3 de la dernière version vue : permet d'éviter un téléchargement si rien n'a été régénéré. */
+  /** S3 ETag of the last version seen: skips the download when nothing was regenerated. */
   etag: string;
-  /** Empreinte du contenu utile de la dernière version archivée. */
+  /** Fingerprint of the useful content of the last archived version. */
   fingerprint: string;
-  /** Jour (AAAA-MM-JJ) de la dernière archive écrite. */
+  /** Day (YYYY-MM-DD) of the last archive written. */
   archivedOn: string;
-  /** Date ISO de la dernière vérification. */
+  /** ISO date of the last check. */
   checkedAt: string;
 }
 
@@ -22,7 +22,7 @@ export class FingerprintLedger {
     this.entries = entries;
   }
 
-  /** Charge le registre, ou en crée un vide au premier lancement. */
+  /** Loads the ledger, or creates an empty one on the first run. */
   static async open(path: string): Promise<FingerprintLedger> {
     try {
       const raw = JSON.parse(await readFile(path, "utf8")) as Record<string, LedgerEntry>;
@@ -41,7 +41,7 @@ export class FingerprintLedger {
     this.entries.set(key, entry);
   }
 
-  /** Écriture atomique (fichier temporaire puis renommage) pour ne jamais laisser un registre tronqué. */
+  /** Atomic write (temporary file then rename) so the ledger is never left truncated. */
   async save(): Promise<void> {
     await mkdir(dirname(this.path), { recursive: true });
     const sorted = Object.fromEntries([...this.entries].sort(([a], [b]) => a.localeCompare(b)));

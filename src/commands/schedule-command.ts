@@ -1,4 +1,4 @@
-// schedule : reste actif et collecte chaque jour à l'heure donnée (mode utilisé par Docker).
+// schedule: stays up and collects every day at the given time (mode used by Docker).
 import { Command } from "commander";
 import type { App } from "../app.ts";
 import { DailyScheduler } from "../collect/daily-scheduler.ts";
@@ -12,8 +12,8 @@ interface ScheduleOptions {
 
 export class ScheduleCommand {
   /**
-   * Par défaut 12:00 UTC : au 2026-09-29, Cardmarket publiait le Price Guide vers 01:00 UTC
-   * et les catalogues vers 11:30 UTC ; une collecte à midi récupère les versions du jour.
+   * 12:00 UTC by default: as of 2026-09-29, Cardmarket published the price guide around 01:00 UTC
+   * and the catalogues around 11:30 UTC; a midday collection gets both of the day's versions.
    */
   static readonly defaultTime = "12:00";
 
@@ -26,10 +26,10 @@ export class ScheduleCommand {
   register(program: Command): void {
     program
       .command("schedule")
-      .description("collecte tous les jours à heure fixe (UTC), sans s'arrêter")
-      .option("-a, --at <HH:MM>", "heure de collecte, en UTC", process.env.COLLECT_AT ?? ScheduleCommand.defaultTime)
-      .option("-g, --games <ids>", "jeux à collecter : « all » ou une liste « 1,6,21 »", process.env.GAMES ?? "all")
-      .option("--run-now", "lance aussi une collecte immédiate au démarrage", false)
+      .description("collect every day at a fixed time (UTC), without stopping")
+      .option("-a, --at <HH:MM>", "collection time, in UTC", process.env.COLLECT_AT ?? ScheduleCommand.defaultTime)
+      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
+      .option("--run-now", "also run a collection immediately on start", false)
       .action(async (options: ScheduleOptions) => {
         const games = GameSelection.parse(options.games);
         const scheduler = new DailyScheduler(options.at, async () => {

@@ -1,4 +1,4 @@
-# Collecteur Cardmarket : lance la collecte tous les jours à COLLECT_AT (UTC).
+# Cardmarket collector: runs the collection every day at COLLECT_AT (UTC).
 FROM node:24-alpine
 
 WORKDIR /app
@@ -12,10 +12,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 
-# Les archives et le registre vivent dans un volume, hors de l'image.
-# Pas d'utilisateur dédié : un dossier monté depuis l'hôte appartient souvent à root.
+# Archives and the ledger live in a volume, outside the image.
+# No dedicated user: a folder mounted from the host is often owned by root.
 VOLUME ["/app/data"]
 
-# Node exécute directement le TypeScript (suppression des types, Node >= 22.18).
-# --run-now : une collecte au démarrage ; sans risque de doublon grâce au registre des empreintes.
+# Node runs TypeScript directly (type stripping, Node >= 22.18).
+# --run-now: one collection on start; no risk of duplicates thanks to the fingerprint ledger.
 CMD ["node", "src/cli.ts", "schedule", "--run-now"]
