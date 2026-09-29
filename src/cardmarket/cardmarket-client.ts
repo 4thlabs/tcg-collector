@@ -1,4 +1,5 @@
-// Accès HTTP aux fichiers publics de Cardmarket (bucket S3, sans authentification).
+// Accès HTTP aux fichiers publics de Cardmarket (bucket S3, sans authentification), via ky.
+import ky, { type KyInstance } from "ky";
 import type { FeedFile } from "./feed-file.ts";
 
 /** Ce que le serveur dit d'un fichier sans le télécharger (requête HEAD). */
@@ -13,20 +14,30 @@ export class CardmarketClient {
   static readonly defaultBaseUrl = "https://downloads.s3.cardmarket.com/productCatalog";
 
   private readonly baseUrl: string;
-  private readonly attempts: number;
-  private readonly retryDelayMs: number;
+  private readonly http: KyInstance;
 
   constructor(baseUrl = CardmarketClient.defaultBaseUrl, attempts = 3, retryDelayMs = 5_000) {
     this.baseUrl = baseUrl;
-    this.attempts = attempts;
-    this.retryDelayMs = retryDelayMs;
+    this.http = ky.create({
+      // Le plus gros fichier (Price Guide Magic) pèse ~26 Mo : large marge pour une connexion lente.
+      timeout: 120_000,
+      // Nouvelles tentatives sur les erreurs réseau, les délais dépassés et les réponses 5xx / 429.
+      retry: {
+        limit: attempts - 1,
+        methods: ["get", "head"],
+        statusCodes: [408, 429, 500, 502, 503, 504],
+        delay: (attempt) => retryDelayMs * attempt,
+        retryOnTimeout: true,
+      },
+    });
   }
 
   /** Version publiée du fichier, ou null s'il n'existe pas (S3 répond 403 pour un fichier absent). */
   async probe(file: FeedFile): Promise<RemoteVersion | null> {
-    const response = await this.request(file, "HEAD");
-    if (response.status === 403 || response.status === 404) return null;
-    this.ensureOk(response, file);
+    const response = await this.http.head(this.urlOf(file), {
+      throwHttpErrors: (status) => status !== 403 && status !== 404,
+    });
+    if (!response.ok) return null;
     return {
       etag: response.headers.get("etag") ?? "",
       lastModified: response.headers.get("last-modified") ?? "",
@@ -36,32 +47,10 @@ export class CardmarketClient {
 
   /** Contenu brut du fichier, tel que publié. */
   async download(file: FeedFile): Promise<Buffer> {
-    const response = await this.request(file, "GET");
-    this.ensureOk(response, file);
-    return Buffer.from(await response.arrayBuffer());
+    return Buffer.from(await this.http.get(this.urlOf(file)).arrayBuffer());
   }
 
   private urlOf(file: FeedFile): string {
     return `${this.baseUrl}/${file.remotePath}`;
-  }
-
-  /** Requête avec nouvelles tentatives sur les erreurs réseau et les erreurs 5xx. */
-  private async request(file: FeedFile, method: "HEAD" | "GET"): Promise<Response> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= this.attempts; attempt++) {
-      try {
-        const response = await fetch(this.urlOf(file), { method });
-        if (response.status < 500) return response;
-        lastError = new Error(`HTTP ${response.status}`);
-      } catch (error) {
-        lastError = error;
-      }
-      if (attempt < this.attempts) await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs * attempt));
-    }
-    throw new Error(`${method} ${this.urlOf(file)} impossible après ${this.attempts} tentatives : ${String(lastError)}`);
-  }
-
-  private ensureOk(response: Response, file: FeedFile): void {
-    if (!response.ok) throw new Error(`Cardmarket a répondu ${response.status} pour ${this.urlOf(file)}`);
   }
 }

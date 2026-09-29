@@ -47,12 +47,25 @@ L'heure par défaut, 12:00 UTC, vient des heures de publication observées le 20
 
 ## Docker
 
+L'image est construite et publiée par la CI sur `ghcr.io/4thlabs/tcg-collector` (tags `latest` et `sha-<commit>`) à chaque commit sur `main`.
+
 ```
-docker compose up -d --build
+docker compose pull && docker compose up -d   # image publiée
+docker compose up -d --build                  # ou construite en local
 docker compose logs -f
 ```
 
+Si le paquet ghcr.io est privé, se connecter d'abord : `docker login ghcr.io` (jeton GitHub avec le droit `read:packages`).
+
 Le conteneur collecte au démarrage puis chaque jour à `COLLECT_AT` (UTC), et redémarre tout seul. Les archives sont dans `./data` sur l'hôte. Relancer le conteneur ne crée pas de doublon : le registre saute les fichiers déjà archivés.
+
+## CI
+
+`.github/workflows/ci.yml`, sur chaque PR et chaque commit sur `main` :
+
+1. vérification des types et tests, sous Node 22.18 et 24 ;
+2. construction de l'image Docker et vérification que la CLI y démarre ;
+3. sur `main` uniquement : publication de l'image sur ghcr.io.
 
 ## Code
 
@@ -61,7 +74,7 @@ src/cli.ts                         point d'entrée Commander
 src/app.ts                         assemblage des dépendances
 src/commands/                      une classe par commande (collect, schedule, games)
 src/cardmarket/feed-file.ts        types de fichiers et chemins sur le serveur
-src/cardmarket/cardmarket-client.ts  HEAD / GET avec nouvelles tentatives
+src/cardmarket/cardmarket-client.ts  HEAD / GET via ky (nouvelles tentatives, délai max)
 src/storage/content-fingerprint.ts   empreinte sans createdAt
 src/storage/fingerprint-ledger.ts    registre JSON (écriture atomique)
 src/storage/snapshot-archive.ts      archives gzip
