@@ -80,7 +80,7 @@ from(bucket: "cardmarket")
 
 The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
-`compose.yaml` runs the collector and an InfluxDB 2.7 (web UI on port 8086, data in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin password and the API token. To use an existing InfluxDB instead, remove the `influxdb` service and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
+`compose.yaml` runs the collector and an InfluxDB 2.7 (web UI on port 8086, data in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin password and the API token. On its first start, InfluxDB creates the `cardmarket` bucket with yearly shards (`docker/influxdb-init/yearly-shards.sh`): with the default weekly shards, each shard repeats every series key, and one month of Magic + Star Wars Unlimited took 1.3 GB instead of 0.45 GB (series keys stored once, values compress well). To use an existing InfluxDB instead, remove the `influxdb` service, create the `cardmarket` bucket, give it yearly shards with `influx bucket update --id <bucket id> --retention 0 --shard-group-duration 52w` (the command the script runs) and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
 
 ```
 cp .env.example .env                          # then edit it

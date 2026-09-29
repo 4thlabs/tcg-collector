@@ -35,3 +35,4 @@ services:
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
     volumes:
       - ./influxdb:/var/lib/influxdb2
+      - ./docker/influxdb-init:/docker-entrypoint-initdb.d:ro   # yearly shards, see the script
