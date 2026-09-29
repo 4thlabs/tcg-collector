@@ -1,9 +1,10 @@
-// Wires the dependencies from the global options (data folder, Cardmarket URL, logging) and DATABASE_URL.
+// Wires the dependencies from the global options (data folder, Cardmarket URL, InfluxDB, logging).
 import { join } from "node:path";
 import { CardmarketClient } from "./cardmarket/cardmarket-client.ts";
 import { Collector } from "./collect/collector.ts";
-import { PriceDatabase } from "./database/price-database.ts";
-import { PriceImporter } from "./import/price-importer.ts";
+import { ImportLedger } from "./import/import-ledger.ts";
+import { InfluxImporter } from "./import/influx-importer.ts";
+import { InfluxWriter } from "./influx/influx-writer.ts";
 import { LoggerFactory, type LogFormat, type Logger } from "./logging/logger-factory.ts";
 import { FingerprintLedger } from "./storage/fingerprint-ledger.ts";
 import { SnapshotArchive } from "./storage/snapshot-archive.ts";
@@ -11,6 +12,8 @@ import { SnapshotArchive } from "./storage/snapshot-archive.ts";
 export interface AppOptions {
   dataDir: string;
   baseUrl: string;
+  influxUrl?: string;
+  influxDatabase: string;
   logLevel: string;
   logFormat: LogFormat;
 }
@@ -26,12 +29,9 @@ export class App {
     this.logger = LoggerFactory.create(options.logLevel, options.logFormat);
   }
 
-  /**
-   * PostgreSQL / TimescaleDB connection URL, e.g. postgres://tcg:password@localhost:5432/tcg.
-   * Only read from the environment, so the password never shows in a command line.
-   */
-  get databaseUrl(): string | undefined {
-    return process.env.DATABASE_URL || undefined;
+  /** True when an InfluxDB URL is configured: the schedule then imports after each collection. */
+  get influxConfigured(): boolean {
+    return Boolean(this.options.influxUrl);
   }
 
   /** Reloads the ledger on each call: every collection starts from the state on disk. */
@@ -40,14 +40,18 @@ export class App {
     return new Collector(this.client, ledger, this.archive(), this.logger);
   }
 
-  /** Runs an import with a connected database, then closes the connection. */
-  async withImporter<T>(task: (importer: PriceImporter) => Promise<T>): Promise<T> {
-    if (!this.databaseUrl) throw new Error("No database: set DATABASE_URL");
-    const database = await PriceDatabase.open(this.databaseUrl, this.logger);
+  /** Runs an import with a connected client, then closes it. The token only comes from INFLUX_TOKEN, never the command line. */
+  async withImporter<T>(task: (importer: InfluxImporter) => Promise<T>): Promise<T> {
+    const { influxUrl, influxDatabase } = this.options;
+    const token = process.env.INFLUX_TOKEN;
+    if (!influxUrl) throw new Error("No InfluxDB URL: set --influx-url or INFLUX_URL");
+    if (!token) throw new Error("No InfluxDB token: set INFLUX_TOKEN");
+    const writer = new InfluxWriter({ url: influxUrl, database: influxDatabase, token });
     try {
-      return await task(new PriceImporter(this.archive(), database, this.logger));
+      const ledger = await ImportLedger.open(join(this.options.dataDir, "import-ledger.json"));
+      return await task(new InfluxImporter(this.archive(), ledger, writer, this.logger));
     } finally {
-      await database.close();
+      await writer.close();
     }
   }
 
