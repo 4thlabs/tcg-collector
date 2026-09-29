@@ -1,6 +1,6 @@
 # tcg-collector
 
-Collects Cardmarket's public files for every game, every day, and imports the price guides into InfluxDB:
+Collects Cardmarket's public files for every game, every day, and imports the price guides into TimescaleDB:
 
 | File | Content | Size (Magic) |
 |---|---|---|
@@ -23,7 +23,6 @@ Catalogues are therefore archived only when they really change. Estimated storag
 ```
 data/
   ledger.json                             last version seen for each file (ETag, fingerprint, dates)
-  import-ledger.json                      last price guide day imported into InfluxDB, per file
   archive/<type>/<game>/<YYYY-MM-DD>.json.gz
 ```
 
@@ -39,59 +38,50 @@ node src/cli.ts games                  # available games and file sizes
 node src/cli.ts collect                # one collection, every game
 node src/cli.ts collect --games 1,21   # Magic and Star Wars Unlimited only
 node src/cli.ts schedule --at 12:00    # collect every day at 12:00 UTC, without stopping
-INFLUX_TOKEN=apiv3_... node src/cli.ts --influx-url http://localhost:8181 import --games 1,21
+DATABASE_URL=postgres://tcg:...@localhost:5432/tcg node src/cli.ts import --games 1,21
 node src/cli.ts --help
 ```
 
-Global options: `--data-dir` (default `data`), `--base-url`, `--influx-url`, `--influx-database` (default `cardmarket`), `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `INFLUX_URL`, `INFLUX_DATABASE`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The InfluxDB token only comes from `INFLUX_TOKEN`, so it never shows in a command line.
+Global options: `--data-dir` (default `data`), `--base-url`, `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The database connection only comes from `DATABASE_URL`, so its password never shows in a command line.
 
 Logs go through [Winston](https://github.com/winstonjs/winston) to the console: `info` shows archived files and the summary of each collection, `warn` a file that failed, `debug` also the unchanged and absent files. `--log-format json` writes one JSON object per line, for a log collector.
 
 The default time, 12:00 UTC, comes from the publication times observed on 2026-09-29: price guide around 01:00 UTC, catalogues around 11:30 UTC.
 
-## InfluxDB
+## TimescaleDB
 
-`import` writes the archived price guides into InfluxDB 3 Core (`/api/v3/write_lp`, line protocol). The database is created by the first write. It only imports the days after the last one recorded in `data/import-ledger.json`, so it can run after every collection; the first run imports the whole archive. `--replay` imports everything again, e.g. into a new database: it creates no duplicates, since InfluxDB keeps one row per series (tag set) and time.
+`import` writes the archived price guides into PostgreSQL with [TimescaleDB](https://www.timescale.com/), through [TypeORM](https://typeorm.io/). On connection it applies the pending migrations: the first one creates the tables, then the `price` hypertable and its compression with [@timescaledb/core](https://github.com/timescale/timescaledb-ts). Entities are TypeORM entity schemas rather than decorated classes (and `@timescaledb/typeorm` is not used), because Node runs this TypeScript directly and does not support decorators.
 
-With `INFLUX_URL` set, `schedule` imports after each collection, for the games in `IMPORT_GAMES` (default: the collected games).
+The `imported_file` table records each imported day, so `import` only imports the new days and can run after every collection; on an empty database, it imports the whole archive. Each day is saved in one transaction. `--replay` imports everything again: rows are upserted, never duplicated.
 
-Data model, one point per product and per day:
+With `DATABASE_URL` set, `schedule` imports after each collection, for the games in `IMPORT_GAMES` (default: the collected games).
 
-| | |
+| Table | Content |
 |---|---|
-| table | `price` |
-| time | the archive day, 00:00 UTC (the price guide is published around 01:00 UTC that day) |
-| tags | `game` (Cardmarket game id), `product` (idProduct), and from the catalogue: `category` (e.g. "Magic Single"), `expansion` (idExpansion), `name` |
-| fields | `low`, `trend`, `avg`, `avg1`, `avg7`, `avg30` and the same with `_foil`, in euros; a value Cardmarket leaves empty is not written |
+| `price` | hypertable, one row per product and per day: `day`, `id_product`, `game`, then `low`, `trend`, `avg`, `avg1`, `avg7`, `avg30` and the same with `_foil`, in euros (null when Cardmarket leaves it empty) |
+| `product` | latest catalogue: `id_product`, `game`, `name`, `category` (e.g. "Magic Single"), `id_expansion`, `id_metacard` |
+| `imported_file` | imported price guides: `feed` (e.g. `price_guide_21`), `day`, `rows`, `imported_at` |
 
-The catalogue used for a day is the latest one archived on or before that day. A price guide is only archived when its content changes, so a missing day means the prices did not move: fill gaps with the previous value, as in the example below. Filter on `product` rather than `name`: a renamed product starts a new series.
+`day` is the archive day; the price guide is published around 01:00 UTC that day. Products are written with the first day imported, then whenever the catalogue changes. A price guide is only archived when its content changes, so a missing day means the prices did not move: fill gaps with the previous value, as in the example below.
 
-Example (SQL), daily trend of a card over 90 days, days without an archive filled with the previous value:
+`price` is split into 7-day chunks, compressed by a TimescaleDB background job once older than 7 days, rows sorted by product then day (a price that does not move costs almost nothing). Measured on simulated Magic + Star Wars Unlimited data (134,000 rows per day): about 3.3 to 3.9 MB per day once compressed, and about 10 s to import a Magic day (batched upserts through TypeORM).
+
+Example, daily trend of a card over 90 days, days without an archive filled with the previous value:
 
 ```sql
-SELECT date_bin_gapfill(INTERVAL '1 day', time) AS day, locf(last_value(trend ORDER BY time)) AS trend
-FROM price
-WHERE product = '757434' AND time >= now() - INTERVAL '90 days' AND time < now()
-GROUP BY 1 ORDER BY 1
-```
-
-```
-curl -G http://localhost:8181/api/v3/query_sql -H "Authorization: Bearer $INFLUX_TOKEN" \
-  --data-urlencode db=cardmarket --data-urlencode format=pretty --data-urlencode "q=SELECT ..."
+SELECT time_bucket_gapfill('1 day', day) AS day, locf(last(trend, day)) AS trend, p.name
+FROM price JOIN product p USING (id_product)
+WHERE id_product = 757434 AND day >= now() - INTERVAL '90 days' AND day < now()
+GROUP BY 1, p.name ORDER BY 1;
 ```
 
 ## Docker
 
 The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
-`compose.yaml` runs the collector and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token: InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
+`compose.yaml` runs the collector and PostgreSQL 17 with TimescaleDB (`timescale/timescaledb` image, port 5432, data in `./timescaledb`). Before the first start, copy `.env.example` to `.env` and set the password of the `tcg` user. The collector waits for the database to be ready, creates the schema on its first import, then fills it from the archive.
 
-- `INFLUXDB3_WAL_FILES_PER_SNAPSHOT=10`: the day's points are persisted to Parquet right after the import, instead of staying in memory for weeks (by default, until 600 write requests).
-- `INFLUXDB3_QUERY_FILE_LIMIT=10000`: Core does not compact, so each day of prices is its own Parquet file and a query over N days reads N files; the default limit would reject queries over long periods.
-
-Measured with one simulated month of Magic + Star Wars Unlimited (3.9 million points): 94 MB of Parquet, and about 8 s to import a Magic day.
-
-To use an existing InfluxDB 3 instead, remove the `influxdb` service and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
+To use an existing PostgreSQL with TimescaleDB instead, remove the `timescaledb` service and point `DATABASE_URL` at it; to only collect, remove `DATABASE_URL`.
 
 ```
 cp .env.example .env                          # then edit it
@@ -126,12 +116,12 @@ src/storage/fingerprint-ledger.ts    JSON ledger (atomic writes)
 src/storage/snapshot-archive.ts      gzip archives (write, list, read)
 src/collect/collector.ts             collection and deduplication logic
 src/collect/daily-scheduler.ts       daily run at a fixed time
-src/import/influx-importer.ts        import of the new price guides, day by day
-src/import/price-point-factory.ts    price guide line -> InfluxDB point
+src/import/price-importer.ts         import of the new price guides, day by day
+src/import/price-row-factory.ts      price guide and catalogue lines -> database rows
 src/import/product-catalog.ts        catalogue in force on a given day (names, expansions)
-src/import/import-ledger.ts          last imported day per file
-src/influx/line-point.ts             line protocol (escaping, float fields)
-src/influx/influx-writer.ts          batched writes to /api/v3/write_lp through ky
+src/database/entities.ts             TypeORM entity schemas (product, price, imported_file)
+src/database/create-price-schema.ts  migration: tables, hypertable and compression
+src/database/price-database.ts       TypeORM data source, migrations, batched upserts
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
 ```
 

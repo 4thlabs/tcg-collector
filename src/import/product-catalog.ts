@@ -4,16 +4,23 @@ import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
 import type { SnapshotArchive } from "../storage/snapshot-archive.ts";
 
 export class ProductCatalog {
-  static readonly empty = new ProductCatalog([]);
+  static readonly empty = new ProductCatalog([], "");
 
+  /** Archives the catalogue was built from, e.g. "products_singles_21@2026-09-28|...": changes when the catalogue does. */
+  readonly version: string;
   private readonly products: Map<number, ProductEntry>;
 
-  constructor(products: readonly ProductEntry[]) {
+  constructor(products: readonly ProductEntry[], version: string) {
     this.products = new Map(products.map((product) => [product.idProduct, product]));
+    this.version = version;
   }
 
   get size(): number {
     return this.products.size;
+  }
+
+  get all(): IterableIterator<ProductEntry> {
+    return this.products.values();
   }
 
   product(idProduct: number): ProductEntry | undefined {
@@ -48,7 +55,7 @@ export class CatalogLoader {
 
     const products: ProductEntry[] = [];
     for (const source of sources) products.push(...(await this.archive.read<ProductListContent>(source.file, source.day)).products);
-    const catalog = sources.length === 0 ? ProductCatalog.empty : new ProductCatalog(products);
+    const catalog = sources.length === 0 ? ProductCatalog.empty : new ProductCatalog(products, key);
     this.cached = { key, catalog };
     return catalog;
   }

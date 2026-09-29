@@ -2,7 +2,7 @@
   "name": "tcg-collector",
   "version": "0.1.0",
   "private": true,
-  "description": "Daily collection of Cardmarket public files (price guide and catalogues) for every game, archived as gzip and deduplicated by fingerprint.",
+  "description": "Daily collection of Cardmarket public files (price guide and catalogues) for every game, archived as gzip, and import of the price guides into TimescaleDB.",
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -13,17 +13,22 @@
   "scripts": {
     "collect": "node src/cli.ts collect",
     "schedule": "node src/cli.ts schedule",
+    "import": "node src/cli.ts import",
     "games": "node src/cli.ts games",
     "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@timescaledb/core": "^0.0.1",
     "commander": "^14.0.0",
     "ky": "^2.1.0",
+    "pg": "^8.23.0",
+    "typeorm": "^1.1.1",
     "winston": "^3.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^5.9.0"
   }
 }
