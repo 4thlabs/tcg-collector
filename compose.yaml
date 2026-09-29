@@ -1,5 +1,6 @@
 services:
   tcg-collector:
+    container_name: tcg-collector
     # Image published by the CI on every commit to main; "build" is the fallback to build locally.
     image: ghcr.io/4thlabs/tcg-collector:latest
     build: .
@@ -21,6 +22,7 @@ services:
 
   # InfluxDB 3 Core, Parquet files in ./influxdb. The database is created by the first write.
   tcg-collector-influxdb:
+    container_name: tcg-collector-influxdb
     image: influxdb:3-core
     restart: unless-stopped
     ports:
