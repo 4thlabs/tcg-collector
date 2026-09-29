@@ -84,14 +84,14 @@ curl -G http://localhost:8181/api/v3/query_sql -H "Authorization: Bearer $INFLUX
 
 The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
-`compose.yaml` runs the collector and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token: InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
+`compose.yaml` runs the collector and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token in `TCG_COLLECTOR_INFLUX_TOKEN` (passed to both containers as `INFLUX_TOKEN`): InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
 
 - `INFLUXDB3_WAL_FILES_PER_SNAPSHOT=10`: the day's points are persisted to Parquet right after the import, instead of staying in memory for weeks (by default, until 600 write requests).
 - `INFLUXDB3_QUERY_FILE_LIMIT=10000`: Core does not compact, so each day of prices is its own Parquet file and a query over N days reads N files; the default limit would reject queries over long periods.
 
 Measured with one simulated month of Magic + Star Wars Unlimited (3.9 million points): 94 MB of Parquet, and about 8 s to import a Magic day.
 
-To use an existing InfluxDB 3 instead, remove the `influxdb` service and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
+To use an existing InfluxDB 3 instead, remove the `tcg-collector-influxdb` service and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
 
 ```
 cp .env.example .env                          # then edit it

@@ -1,11 +1,11 @@
 services:
-  collector:
+  tcg-collector:
     # Image published by the CI on every commit to main; "build" is the fallback to build locally.
     image: ghcr.io/4thlabs/tcg-collector:latest
     build: .
     restart: unless-stopped
     depends_on:
-      - influxdb
+      - tcg-collector-influxdb
     environment:
       COLLECT_AT: "12:00"   # daily collection time, UTC
       GAMES: "all"          # or a list, e.g. "1,21" for Magic and Star Wars Unlimited
@@ -13,22 +13,20 @@ services:
       LOG_LEVEL: "info"     # error, warn, info or debug
       LOG_FORMAT: "text"    # or "json" for a log collector
       # Remove INFLUX_URL to only collect, without importing.
-      INFLUX_URL: "http://influxdb:8181"
+      INFLUX_URL: "http://tcg-collector-influxdb:8181"
       INFLUX_DATABASE: "cardmarket"
-      INFLUX_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
+      INFLUX_TOKEN: "${TCG_COLLECTOR_INFLUX_TOKEN:?set TCG_COLLECTOR_INFLUX_TOKEN in .env}"
     volumes:
       - ./data:/app/data
 
   # InfluxDB 3 Core, Parquet files in ./influxdb. The database is created by the first write.
-  influxdb:
+  tcg-collector-influxdb:
     image: influxdb:3-core
     restart: unless-stopped
-    # The image runs as "influxdb3", which cannot write to a folder Docker creates on the host (owned by root).
-    user: root
     ports:
       - "8181:8181"         # HTTP API (write, SQL and InfluxQL queries), e.g. for Grafana
     environment:
-      INFLUX_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
+      INFLUX_TOKEN: "${TCG_COLLECTOR_INFLUX_TOKEN:?set TCG_COLLECTOR_INFLUX_TOKEN in .env}"
       # One write a day: persist to Parquet after every 10 WAL files instead of 600, so the data leaves
       # memory the same day, and keep few WAL files once persisted.
       INFLUXDB3_WAL_FILES_PER_SNAPSHOT: "10"
