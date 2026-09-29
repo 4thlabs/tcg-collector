@@ -1,4 +1,5 @@
 // schedule: stays up and collects every day at the given time (mode used by Docker).
+// When InfluxDB is configured, each collection is followed by an import of the new catalogues and price guides.
 import { Command } from "commander";
 import type { App } from "../app.ts";
 import { DailyScheduler } from "../collect/daily-scheduler.ts";
@@ -7,6 +8,7 @@ import { GameSelection } from "../collect/game-selection.ts";
 interface ScheduleOptions {
   at: string;
   games: string;
+  importGames?: string;
   runNow: boolean;
 }
 
@@ -29,13 +31,16 @@ export class ScheduleCommand {
       .description("collect every day at a fixed time (UTC), without stopping")
       .option("-a, --at <HH:MM>", "collection time, in UTC", process.env.COLLECT_AT ?? ScheduleCommand.defaultTime)
       .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
+      .option("--import-games <ids>", "games to import into InfluxDB after each collection (default: the collected games)", process.env.IMPORT_GAMES)
       .option("--run-now", "also run a collection immediately on start", false)
       .action(async (options: ScheduleOptions) => {
         const app = this.app();
         const games = GameSelection.parse(options.games);
+        const importGames = options.importGames ? GameSelection.parse(options.importGames) : games;
         const collect = async () => {
           const report = await (await app.createCollector()).collect(games);
           app.logger.info(report.summary());
+          if (app.influxConfigured) await app.withImporter((importer) => importer.import(importGames));
         };
         const scheduler = new DailyScheduler(options.at, collect, app.logger);
         if (options.runNow) await scheduler.runOnce();
