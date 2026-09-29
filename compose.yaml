@@ -13,26 +13,37 @@ services:
       LOG_LEVEL: "info"     # error, warn, info or debug
       LOG_FORMAT: "text"    # or "json" for a log collector
       # Remove INFLUX_URL to only collect, without importing.
-      INFLUX_URL: "http://influxdb:8086"
-      INFLUX_ORG: "tcg"
-      INFLUX_BUCKET: "cardmarket"
+      INFLUX_URL: "http://influxdb:8181"
+      INFLUX_DATABASE: "cardmarket"
       INFLUX_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
     volumes:
       - ./data:/app/data
 
-  # InfluxDB 2.x: created on the first start with the organisation, bucket and token below (see .env.example).
+  # InfluxDB 3 Core, Parquet files in ./influxdb. The database is created by the first write.
   influxdb:
-    image: influxdb:2.7
+    image: influxdb:3-core
     restart: unless-stopped
+    # The image runs as "influxdb3", which cannot write to a folder Docker creates on the host (owned by root).
+    user: root
     ports:
-      - "8086:8086"         # web UI and API, e.g. for Grafana
+      - "8181:8181"         # HTTP API (write, SQL and InfluxQL queries), e.g. for Grafana
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: "setup"
-      DOCKER_INFLUXDB_INIT_USERNAME: "admin"
-      DOCKER_INFLUXDB_INIT_PASSWORD: "${INFLUX_PASSWORD:?set INFLUX_PASSWORD in .env}"
-      DOCKER_INFLUXDB_INIT_ORG: "tcg"
-      DOCKER_INFLUXDB_INIT_BUCKET: "cardmarket"
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
+      INFLUX_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
+      # One write a day: persist to Parquet after every 10 WAL files instead of 600, so the data leaves
+      # memory the same day, and keep few WAL files once persisted.
+      INFLUXDB3_WAL_FILES_PER_SNAPSHOT: "10"
+      INFLUXDB3_SNAPSHOTTED_WAL_FILES_TO_KEEP: "10"
+      # Core has no compaction: one Parquet file per day of prices, and a query reads one file per day it covers.
+      # The default limit is sized for recent data; raised so queries can cover years of daily prices.
+      INFLUXDB3_QUERY_FILE_LIMIT: "10000"
+    # The admin token comes from .env: written to a token file that InfluxDB loads on its first start.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        umask 077 &&
+        printf '{"token":"%s","name":"_admin"}' "$$INFLUX_TOKEN" > /tmp/admin-token.json &&
+        exec influxdb3 serve --node-id nas --object-store file --data-dir /var/lib/influxdb3
+        --admin-token-file /tmp/admin-token.json
     volumes:
-      - ./influxdb:/var/lib/influxdb2
-      - ./docker/influxdb-init:/docker-entrypoint-initdb.d:ro   # yearly shards, see the script
+      - ./influxdb:/var/lib/influxdb3

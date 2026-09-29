@@ -13,8 +13,7 @@ export interface AppOptions {
   dataDir: string;
   baseUrl: string;
   influxUrl?: string;
-  influxOrg: string;
-  influxBucket: string;
+  influxDatabase: string;
   logLevel: string;
   logFormat: LogFormat;
 }
@@ -43,11 +42,11 @@ export class App {
 
   /** The token only comes from the environment (INFLUX_TOKEN), so it never shows in a command line. */
   async createImporter(): Promise<InfluxImporter> {
-    const { influxUrl, influxOrg, influxBucket } = this.options;
+    const { influxUrl, influxDatabase } = this.options;
     const token = process.env.INFLUX_TOKEN;
     if (!influxUrl) throw new Error("No InfluxDB URL: set --influx-url or INFLUX_URL");
     if (!token) throw new Error("No InfluxDB token: set INFLUX_TOKEN");
-    const writer = new InfluxWriter({ url: influxUrl, org: influxOrg, bucket: influxBucket, token });
+    const writer = new InfluxWriter({ url: influxUrl, database: influxDatabase, token });
     const ledger = await ImportLedger.open(join(this.options.dataDir, "import-ledger.json"));
     return new InfluxImporter(this.archive(), ledger, writer, this.logger);
   }

@@ -18,7 +18,7 @@ class FakeWriter extends InfluxWriter {
   lines: string[] = [];
 
   constructor() {
-    super({ url: "http://influx.invalid", org: "tcg", bucket: "cardmarket", token: "test" });
+    super({ url: "http://influx.invalid", database: "cardmarket", token: "test" });
   }
 
   override async write(points: readonly LinePoint[]): Promise<number> {

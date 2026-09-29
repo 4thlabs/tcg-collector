@@ -13,8 +13,7 @@ interface GlobalOptions {
   dataDir: string;
   baseUrl: string;
   influxUrl?: string;
-  influxOrg: string;
-  influxBucket: string;
+  influxDatabase: string;
   logLevel: string;
   logFormat: LogFormat;
 }
@@ -28,9 +27,8 @@ class Cli {
       .description("Daily collection of Cardmarket's public files (price guide and catalogues)")
       .option("-d, --data-dir <folder>", "folder for the archives and the ledger", process.env.DATA_DIR ?? "data")
       .option("--base-url <url>", "base URL of the Cardmarket files", process.env.CARDMARKET_BASE_URL ?? CardmarketClient.defaultBaseUrl)
-      .option("--influx-url <url>", "InfluxDB 2.x URL, e.g. http://localhost:8086 (token: INFLUX_TOKEN)", process.env.INFLUX_URL)
-      .option("--influx-org <org>", "InfluxDB organisation", process.env.INFLUX_ORG ?? "tcg")
-      .option("--influx-bucket <bucket>", "InfluxDB bucket", process.env.INFLUX_BUCKET ?? "cardmarket")
+      .option("--influx-url <url>", "InfluxDB 3 URL, e.g. http://localhost:8181 (token: INFLUX_TOKEN)", process.env.INFLUX_URL)
+      .option("--influx-database <name>", "InfluxDB database", process.env.INFLUX_DATABASE ?? "cardmarket")
       .addOption(new Option("--log-level <level>", "log level").choices(LoggerFactory.levels).default(process.env.LOG_LEVEL ?? "info"))
       .addOption(new Option("--log-format <format>", "log format").choices(["text", "json"]).default(process.env.LOG_FORMAT ?? "text"));
 

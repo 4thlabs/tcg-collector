@@ -1,19 +1,23 @@
-// Writes points to InfluxDB 2.x through its HTTP API (/api/v2/write), with ky.
+// Writes points to InfluxDB 3 through its HTTP API (/api/v3/write_lp), with ky.
 import ky, { type KyInstance } from "ky";
 import type { LinePoint } from "./line-point.ts";
 
 export interface InfluxSettings {
-  /** e.g. http://influxdb:8086 */
+  /** e.g. http://influxdb:8181 */
   url: string;
-  org: string;
-  bucket: string;
-  /** API token with write access to the bucket. */
+  /** Database, created by InfluxDB on the first write. */
+  database: string;
+  /** Token with write access to the database. */
   token: string;
 }
 
 export class InfluxWriter {
-  /** Points per request: InfluxDB recommends batches of about 5,000 lines. */
-  static readonly batchSize = 5_000;
+  /**
+   * Points per request. InfluxDB 3 acknowledges a write once its WAL is flushed (every second by default),
+   * so each request costs about a second: large batches keep a Magic day (~126,000 points) to a few requests.
+   * 25,000 lines stay around 5 MB, under the 10 MB default request limit.
+   */
+  static readonly batchSize = 25_000;
 
   private readonly settings: InfluxSettings;
   private readonly http: KyInstance;
@@ -37,9 +41,9 @@ export class InfluxWriter {
   async write(points: readonly LinePoint[]): Promise<number> {
     for (let start = 0; start < points.length; start += InfluxWriter.batchSize) {
       const lines = points.slice(start, start + InfluxWriter.batchSize).map((point) => point.toLine());
-      await this.http.post(`${this.settings.url.replace(/\/+$/, "")}/api/v2/write`, {
-        searchParams: { org: this.settings.org, bucket: this.settings.bucket, precision: "s" },
-        headers: { authorization: `Token ${this.settings.token}`, "content-type": "text/plain; charset=utf-8" },
+      await this.http.post(`${this.settings.url.replace(/\/+$/, "")}/api/v3/write_lp`, {
+        searchParams: { db: this.settings.database, precision: "second" },
+        headers: { authorization: `Bearer ${this.settings.token}`, "content-type": "text/plain; charset=utf-8" },
         body: lines.join("\n"),
       });
     }

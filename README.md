@@ -39,11 +39,11 @@ node src/cli.ts games                  # available games and file sizes
 node src/cli.ts collect                # one collection, every game
 node src/cli.ts collect --games 1,21   # Magic and Star Wars Unlimited only
 node src/cli.ts schedule --at 12:00    # collect every day at 12:00 UTC, without stopping
-INFLUX_TOKEN=... node src/cli.ts --influx-url http://localhost:8086 import --games 1,21
+INFLUX_TOKEN=apiv3_... node src/cli.ts --influx-url http://localhost:8181 import --games 1,21
 node src/cli.ts --help
 ```
 
-Global options: `--data-dir` (default `data`), `--base-url`, `--influx-url`, `--influx-org` (default `tcg`), `--influx-bucket` (default `cardmarket`), `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `INFLUX_URL`, `INFLUX_ORG`, `INFLUX_BUCKET`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The InfluxDB token only comes from `INFLUX_TOKEN`, so it never shows in a command line.
+Global options: `--data-dir` (default `data`), `--base-url`, `--influx-url`, `--influx-database` (default `cardmarket`), `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `INFLUX_URL`, `INFLUX_DATABASE`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The InfluxDB token only comes from `INFLUX_TOKEN`, so it never shows in a command line.
 
 Logs go through [Winston](https://github.com/winstonjs/winston) to the console: `info` shows archived files and the summary of each collection, `warn` a file that failed, `debug` also the unchanged and absent files. `--log-format json` writes one JSON object per line, for a log collector.
 
@@ -51,7 +51,7 @@ The default time, 12:00 UTC, comes from the publication times observed on 2026-0
 
 ## InfluxDB
 
-`import` writes the archived price guides into InfluxDB 2.x (HTTP API, line protocol). It only imports the days after the last one recorded in `data/import-ledger.json`, so it can run after every collection; the first run imports the whole archive. `--replay` imports everything again, e.g. into a new bucket: it creates no duplicates, since InfluxDB overwrites a point with the same series and time.
+`import` writes the archived price guides into InfluxDB 3 Core (`/api/v3/write_lp`, line protocol). The database is created by the first write. It only imports the days after the last one recorded in `data/import-ledger.json`, so it can run after every collection; the first run imports the whole archive. `--replay` imports everything again, e.g. into a new database: it creates no duplicates, since InfluxDB keeps one row per series (tag set) and time.
 
 With `INFLUX_URL` set, `schedule` imports after each collection, for the games in `IMPORT_GAMES` (default: the collected games).
 
@@ -59,28 +59,39 @@ Data model, one point per product and per day:
 
 | | |
 |---|---|
-| measurement | `price` |
+| table | `price` |
 | time | the archive day, 00:00 UTC (the price guide is published around 01:00 UTC that day) |
 | tags | `game` (Cardmarket game id), `product` (idProduct), and from the catalogue: `category` (e.g. "Magic Single"), `expansion` (idExpansion), `name` |
 | fields | `low`, `trend`, `avg`, `avg1`, `avg7`, `avg30` and the same with `_foil`, in euros; a value Cardmarket leaves empty is not written |
 
-The catalogue used for a day is the latest one archived on or before that day. A price guide is only archived when its content changes, so a missing day means the prices did not move: fill gaps with the previous value, as in the example below. Filter series on `product` rather than `name`: a renamed product starts a new series.
+The catalogue used for a day is the latest one archived on or before that day. A price guide is only archived when its content changes, so a missing day means the prices did not move: fill gaps with the previous value, as in the example below. Filter on `product` rather than `name`: a renamed product starts a new series.
 
-Example (Flux), daily trend of a card over 90 days, days without an archive filled with the previous value:
+Example (SQL), daily trend of a card over 90 days, days without an archive filled with the previous value:
+
+```sql
+SELECT date_bin_gapfill(INTERVAL '1 day', time) AS day, locf(last_value(trend ORDER BY time)) AS trend
+FROM price
+WHERE product = '757434' AND time >= now() - INTERVAL '90 days' AND time < now()
+GROUP BY 1 ORDER BY 1
+```
 
 ```
-from(bucket: "cardmarket")
-  |> range(start: -90d)
-  |> filter(fn: (r) => r._measurement == "price" and r.product == "757434" and r._field == "trend")
-  |> aggregateWindow(every: 1d, fn: last, createEmpty: true, timeSrc: "_start")
-  |> fill(usePrevious: true)
+curl -G http://localhost:8181/api/v3/query_sql -H "Authorization: Bearer $INFLUX_TOKEN" \
+  --data-urlencode db=cardmarket --data-urlencode format=pretty --data-urlencode "q=SELECT ..."
 ```
 
 ## Docker
 
 The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
-`compose.yaml` runs the collector and an InfluxDB 2.7 (web UI on port 8086, data in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin password and the API token. On its first start, InfluxDB creates the `cardmarket` bucket with yearly shards (`docker/influxdb-init/yearly-shards.sh`): with the default weekly shards, each shard repeats every series key, and one month of Magic + Star Wars Unlimited took 1.3 GB instead of 0.45 GB (series keys stored once, values compress well). To use an existing InfluxDB instead, remove the `influxdb` service, create the `cardmarket` bucket, give it yearly shards with `influx bucket update --id <bucket id> --retention 0 --shard-group-duration 52w` (the command the script runs) and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
+`compose.yaml` runs the collector and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token: InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
+
+- `INFLUXDB3_WAL_FILES_PER_SNAPSHOT=10`: the day's points are persisted to Parquet right after the import, instead of staying in memory for weeks (by default, until 600 write requests).
+- `INFLUXDB3_QUERY_FILE_LIMIT=10000`: Core does not compact, so each day of prices is its own Parquet file and a query over N days reads N files; the default limit would reject queries over long periods.
+
+Measured with one simulated month of Magic + Star Wars Unlimited (3.9 million points): 94 MB of Parquet, and about 8 s to import a Magic day.
+
+To use an existing InfluxDB 3 instead, remove the `influxdb` service and point `INFLUX_URL` at it; to only collect, remove `INFLUX_URL`.
 
 ```
 cp .env.example .env                          # then edit it
@@ -120,7 +131,7 @@ src/import/price-point-factory.ts    price guide line -> InfluxDB point
 src/import/product-catalog.ts        catalogue in force on a given day (names, expansions)
 src/import/import-ledger.ts          last imported day per file
 src/influx/line-point.ts             line protocol (escaping, float fields)
-src/influx/influx-writer.ts          batched writes to /api/v2/write through ky
+src/influx/influx-writer.ts          batched writes to /api/v3/write_lp through ky
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
 ```
 
