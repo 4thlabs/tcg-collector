@@ -1,7 +1,8 @@
 services:
   collector:
+    # Image publiée par la CI à chaque commit sur main ; « build » sert de repli pour construire en local.
+    image: ghcr.io/4thlabs/tcg-collector:latest
     build: .
-    image: cardmarket-collector
     restart: unless-stopped
     environment:
       COLLECT_AT: "12:00"   # heure UTC de la collecte quotidienne
