@@ -4,10 +4,34 @@ services:
     image: ghcr.io/4thlabs/tcg-collector:latest
     build: .
     restart: unless-stopped
+    depends_on:
+      - influxdb
     environment:
       COLLECT_AT: "12:00"   # daily collection time, UTC
       GAMES: "all"          # or a list, e.g. "1,21" for Magic and Star Wars Unlimited
+      IMPORT_GAMES: "1,21"  # games imported into InfluxDB after each collection (empty: the collected games)
       LOG_LEVEL: "info"     # error, warn, info or debug
       LOG_FORMAT: "text"    # or "json" for a log collector
+      # Remove INFLUX_URL to only collect, without importing.
+      INFLUX_URL: "http://influxdb:8086"
+      INFLUX_ORG: "tcg"
+      INFLUX_BUCKET: "cardmarket"
+      INFLUX_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
     volumes:
       - ./data:/app/data
+
+  # InfluxDB 2.x: created on the first start with the organisation, bucket and token below (see .env.example).
+  influxdb:
+    image: influxdb:2.7
+    restart: unless-stopped
+    ports:
+      - "8086:8086"         # web UI and API, e.g. for Grafana
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: "setup"
+      DOCKER_INFLUXDB_INIT_USERNAME: "admin"
+      DOCKER_INFLUXDB_INIT_PASSWORD: "${INFLUX_PASSWORD:?set INFLUX_PASSWORD in .env}"
+      DOCKER_INFLUXDB_INIT_ORG: "tcg"
+      DOCKER_INFLUXDB_INIT_BUCKET: "cardmarket"
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUX_TOKEN:?set INFLUX_TOKEN in .env}"
+    volumes:
+      - ./influxdb:/var/lib/influxdb2
