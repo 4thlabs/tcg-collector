@@ -1,0 +1,195 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CARDMARKET",
+      "label": "Cardmarket",
+      "description": "InfluxDB 3 datasource in SQL mode, database cardmarket",
+      "type": "datasource",
+      "pluginId": "influxdb",
+      "pluginName": "InfluxDB"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "influxdb",
+      "name": "InfluxDB",
+      "version": "1.0.0"
+    }
+  ],
+  "uid": "cardmarket-card",
+  "title": "Card",
+  "description": "Cardmarket prices of one card. Type part of its name in Search, then pick it in Card.",
+  "tags": [
+    "cardmarket"
+  ],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "refresh": "",
+  "templating": {
+    "list": [
+      {
+        "name": "game",
+        "label": "Game",
+        "type": "custom",
+        "query": "Magic : 1,Star Wars Unlimited : 21",
+        "current": {
+          "text": "Magic",
+          "value": "1"
+        }
+      },
+      {
+        "name": "search",
+        "label": "Search",
+        "type": "textbox",
+        "query": "Sol Ring",
+        "current": {
+          "text": "Sol Ring",
+          "value": "Sol Ring"
+        }
+      },
+      {
+        "name": "card",
+        "label": "Card",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS_CARDMARKET}"
+        },
+        "refresh": 1,
+        "query": {
+          "refId": "card",
+          "rawSql": "SELECT concat(name, ' · ', substr(date_added, 1, 10), ' · ', product) AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200",
+          "query": "SELECT concat(name, ' · ', substr(date_added, 1, 10), ' · ', product) AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200"
+        },
+        "regex": "/^(?<text>.* · .*) · (?<value>\\d+)$/",
+        "sort": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "${card:text}",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 16
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"height:100%;display:flex;align-items:center;justify-content:center\">\n  <img src=\"https://api.scryfall.com/cards/cardmarket/${card}?format=image&version=normal\"\n       alt=\"No image (Magic only, via Scryfall)\" style=\"max-width:100%;max-height:100%;border-radius:4.75%\">\n</div>"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Latest prices",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 18,
+        "h": 4
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_CARDMARKET}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_CARDMARKET}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT nullif(low, 0) AS low, nullif(trend, 0) AS trend, nullif(avg30, 0) AS avg30, nullif(low_foil, 0) AS low_foil, nullif(trend_foil, 0) AS trend_foil\nFROM price\nWHERE game = '${game}' AND product = '${card}'\nORDER BY time DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Daily prices",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 18,
+        "h": 12
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_CARDMARKET}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_CARDMARKET}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin_gapfill(INTERVAL '1 day', time) AS time,\n  locf(last_value(nullif(low, 0) ORDER BY time)) AS low,\n  locf(last_value(nullif(trend, 0) ORDER BY time)) AS trend,\n  locf(last_value(nullif(avg30, 0) ORDER BY time)) AS avg30,\n  locf(last_value(nullif(low_foil, 0) ORDER BY time)) AS low_foil,\n  locf(last_value(nullif(trend_foil, 0) ORDER BY time)) AS trend_foil\nFROM price\nWHERE game = '${game}' AND product = '${card}' AND $__timeFilter(time)\nGROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "custom": {
+            "lineInterpolation": "stepAfter",
+            "spanNulls": false,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

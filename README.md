@@ -104,6 +104,10 @@ If the ghcr.io package is private, log in first: `docker login ghcr.io` (GitHub 
 
 The container collects (and imports) on start, then every day at `COLLECT_AT` (UTC), and restarts on its own. Archives are in `./data` on the host. Restarting the container creates no duplicates: the ledger skips files already archived.
 
+## Grafana
+
+`grafana/card.json` is a dashboard to import into Grafana: price history and image of one card, found by name. See [grafana/README.md](grafana/README.md).
+
 ## CI
 
 `.github/workflows/ci.yml`, on every PR and every commit to `main`:
