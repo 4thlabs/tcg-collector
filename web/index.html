@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Card prices</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/chart.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Card prices</h1>
+        <p class="sub">Cardmarket prices archived every day by tcg-collector.</p>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Game" id="game">
+          <button type="button" data-game="1" aria-pressed="true">Magic</button>
+          <button type="button" data-game="21" aria-pressed="false">Star Wars Unlimited</button>
+        </div>
+        <input type="search" id="query" placeholder="Card name, e.g. Sol Ring" autocomplete="off" aria-label="Search a card">
+      </div>
+    </header>
+
+    <div class="grid">
+      <aside class="panel" aria-label="Results">
+        <div class="rail-head"><span>Cards</span><span id="count"></span></div>
+        <ul class="results" id="results" role="listbox" aria-label="Cards found"></ul>
+        <p class="note" id="rail-note">Type at least 3 letters of a card name.</p>
+      </aside>
+
+      <main class="panel" id="sheet" aria-live="polite">
+        <div class="empty-sheet">
+          <strong>No card selected</strong>
+          <span>Search a card, then pick the printing in the list: the sheet shows its latest prices and daily prices.</span>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <template id="result-template">
+    <li class="result" role="option" tabindex="0">
+      <span class="name"></span>
+      <span class="id"></span>
+      <span class="expansion"></span>
+      <span class="added"></span>
+    </li>
+  </template>
+
+  <template id="sheet-template">
+    <div class="sheet">
+      <figure class="art" hidden><img alt=""></figure>
+      <div class="facts">
+        <div>
+          <h2 class="card-name"></h2>
+          <div class="meta">
+            <span class="card-game"></span>
+            <span>idProduct <code class="card-id"></code></span>
+            <span class="card-expansion"></span>
+            <span class="card-added"></span>
+            <a class="card-link" target="_blank" rel="noopener noreferrer">Open on Cardmarket</a>
+          </div>
+        </div>
+        <div class="prices"><p class="note">Loading prices…</p></div>
+        <div class="asof"></div>
+      </div>
+      <div class="chart-area">
+        <div class="chart-head">
+          <h3>Daily prices (a day without a price guide keeps the previous price)</h3>
+          <div class="seg range" role="group" aria-label="Period">
+            <button type="button" data-days="30">30 d</button>
+            <button type="button" data-days="90">90 d</button>
+            <button type="button" data-days="365">1 y</button>
+            <button type="button" data-days="3650">All</button>
+          </div>
+        </div>
+        <div class="chart-box"><canvas aria-label="Daily prices chart"></canvas></div>
+        <div class="chart-note"></div>
+      </div>
+    </div>
+  </template>
+</body>
+</html>
