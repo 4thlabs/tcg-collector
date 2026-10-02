@@ -223,12 +223,22 @@ class ResultList {
 /** Line chart of the daily prices, drawn with the theme's colors. */
 class PriceChart {
   static series = [
-    { field: "low", label: "Low", color: "--accent", dashed: false },
-    { field: "trend", label: "Trend", color: "--fg", dashed: false },
-    { field: "avg30", label: "30-day avg", color: "--muted", dashed: true },
-    { field: "low_foil", label: "Low foil", color: "--foil", dashed: true },
-    { field: "trend_foil", label: "Trend foil", color: "--foil", dashed: false },
+    { field: "low", label: "Low", color: "--accent", line: "solid" },
+    { field: "trend", label: "Trend", color: "--fg", line: "solid" },
+    { field: "avg30", label: "30-day avg", color: "--muted", line: "dashed" },
+    // The 1-day averages follow the day's sales, so they are noisier: thin dotted lines.
+    { field: "avg1", label: "1-day avg", color: "--fg", line: "dotted" },
+    { field: "low_foil", label: "Low foil", color: "--foil", line: "dashed" },
+    { field: "trend_foil", label: "Trend foil", color: "--foil", line: "solid" },
+    { field: "avg1_foil", label: "1-day avg foil", color: "--foil", line: "dotted" },
   ];
+
+  /** Width and dash pattern of each line style. */
+  static lines = {
+    solid: { width: 2, dash: [] },
+    dashed: { width: 1.5, dash: [5, 4] },
+    dotted: { width: 1.5, dash: [1, 3] },
+  };
 
   constructor(canvas, note) {
     this.canvas = canvas;
@@ -247,13 +257,13 @@ class PriceChart {
     const grid = color("--line");
     const datasets = PriceChart.series
       .filter(({ field }) => days.some((day) => day[field] != null))
-      .map(({ field, label, color: token, dashed }) => ({
+      .map(({ field, label, color: token, line }) => ({
         label,
         data: days.map((day) => day[field]),
         borderColor: color(token),
         backgroundColor: color(token),
-        borderWidth: dashed ? 1.5 : 2,
-        borderDash: dashed ? [5, 4] : [],
+        borderWidth: PriceChart.lines[line].width,
+        borderDash: PriceChart.lines[line].dash,
         pointRadius: 0,
         pointHoverRadius: 3,
         stepped: true,
