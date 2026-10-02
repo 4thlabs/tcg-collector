@@ -44,6 +44,22 @@
         }
       },
       {
+        "name": "site",
+        "label": "Cardmarket game",
+        "type": "query",
+        "hide": 2,
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS_CARDMARKET}"
+        },
+        "refresh": 1,
+        "query": {
+          "refId": "site",
+          "rawSql": "SELECT arrow_cast(CASE '${game}' WHEN '1' THEN 'Magic' WHEN '21' THEN 'StarWarsUnlimited' END, 'Utf8') AS site",
+          "query": "SELECT arrow_cast(CASE '${game}' WHEN '1' THEN 'Magic' WHEN '21' THEN 'StarWarsUnlimited' END, 'Utf8') AS site"
+        }
+      },
+      {
         "name": "search",
         "label": "Search",
         "type": "textbox",
@@ -64,10 +80,10 @@
         "refresh": 1,
         "query": {
           "refId": "card",
-          "rawSql": "SELECT arrow_cast(concat(name, ' · ', substr(date_added, 1, 10), ' · ', product), 'Utf8') AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200",
-          "query": "SELECT arrow_cast(concat(name, ' · ', substr(date_added, 1, 10), ' · ', product), 'Utf8') AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200"
+          "rawSql": "WITH latest AS (\n  SELECT DISTINCT ON (product) product, name, category, id_expansion, date_added\n  FROM product WHERE game = '${game}'\n  ORDER BY product, time DESC\n), hits AS (\n  SELECT product, name, id_expansion, date_added,\n    count(*) OVER (PARTITION BY id_expansion, name) AS versions,\n    row_number() OVER (PARTITION BY id_expansion, name ORDER BY CAST(product AS BIGINT)) AS version\n  FROM latest\n  WHERE name ILIKE concat('%', ${search:sqlstring}, '%')\n), labels AS (\n  SELECT DISTINCT ON (id_expansion) id_expansion, label FROM (\n    SELECT id_expansion,\n      CASE\n        WHEN name ~* ':? Full Set( \\(.*\\))?$' THEN 1\n        WHEN name ~* ':? (Rare|Common|Uncommon|Leader|Legendary|Base) Set$' THEN 2\n        WHEN name ~ ': \"\"' THEN 3\n        ELSE 4 END AS rank,\n      trim(regexp_replace(regexp_replace(regexp_replace(name,\n        ':? (Full|Rare|Common|Uncommon|Leader|Legendary|Base) Set( \\(.*\\))?$', '', 'i'),\n        ': \"\".*$', ''),\n        '[: ]+(Foil Promo Pack|Promo Pack|Prerelease Promo|Buy-a-Box Promo|Booster Box|Booster Display|Booster|Display|Bundle|Prerelease Pack|Deck|Box)\\b.*$', '', 'i')) AS label\n    FROM latest\n    WHERE category NOT LIKE '%Single' AND id_expansion IN (SELECT id_expansion FROM hits)\n  ) WHERE label <> ''\n  ORDER BY id_expansion, rank, length(label)\n)\nSELECT arrow_cast(concat(h.name, ' · ', coalesce(l.label, concat('Expansion ', h.id_expansion)),\n         CASE WHEN h.versions > 1 THEN concat(' · V.', h.version) ELSE '' END,\n         ' · ', h.product), 'Utf8') AS card\nFROM hits h LEFT JOIN labels l ON l.id_expansion = h.id_expansion\nORDER BY h.date_added DESC, h.version LIMIT 200",
+          "query": "WITH latest AS (\n  SELECT DISTINCT ON (product) product, name, category, id_expansion, date_added\n  FROM product WHERE game = '${game}'\n  ORDER BY product, time DESC\n), hits AS (\n  SELECT product, name, id_expansion, date_added,\n    count(*) OVER (PARTITION BY id_expansion, name) AS versions,\n    row_number() OVER (PARTITION BY id_expansion, name ORDER BY CAST(product AS BIGINT)) AS version\n  FROM latest\n  WHERE name ILIKE concat('%', ${search:sqlstring}, '%')\n), labels AS (\n  SELECT DISTINCT ON (id_expansion) id_expansion, label FROM (\n    SELECT id_expansion,\n      CASE\n        WHEN name ~* ':? Full Set( \\(.*\\))?$' THEN 1\n        WHEN name ~* ':? (Rare|Common|Uncommon|Leader|Legendary|Base) Set$' THEN 2\n        WHEN name ~ ': \"\"' THEN 3\n        ELSE 4 END AS rank,\n      trim(regexp_replace(regexp_replace(regexp_replace(name,\n        ':? (Full|Rare|Common|Uncommon|Leader|Legendary|Base) Set( \\(.*\\))?$', '', 'i'),\n        ': \"\".*$', ''),\n        '[: ]+(Foil Promo Pack|Promo Pack|Prerelease Promo|Buy-a-Box Promo|Booster Box|Booster Display|Booster|Display|Bundle|Prerelease Pack|Deck|Box)\\b.*$', '', 'i')) AS label\n    FROM latest\n    WHERE category NOT LIKE '%Single' AND id_expansion IN (SELECT id_expansion FROM hits)\n  ) WHERE label <> ''\n  ORDER BY id_expansion, rank, length(label)\n)\nSELECT arrow_cast(concat(h.name, ' · ', coalesce(l.label, concat('Expansion ', h.id_expansion)),\n         CASE WHEN h.versions > 1 THEN concat(' · V.', h.version) ELSE '' END,\n         ' · ', h.product), 'Utf8') AS card\nFROM hits h LEFT JOIN labels l ON l.id_expansion = h.id_expansion\nORDER BY h.date_added DESC, h.version LIMIT 200"
         },
-        "regex": "/^(?<text>.* · .*) · (?<value>\\d+)$/",
+        "regex": "/^(?<text>.*) · (?<value>\\d+)$/",
         "sort": 0
       }
     ]
@@ -85,7 +101,7 @@
       },
       "options": {
         "mode": "html",
-        "content": "<div style=\"height:100%;display:flex;align-items:center;justify-content:center\">\n  <img src=\"https://api.scryfall.com/cards/cardmarket/${card}?format=image&version=normal\"\n       alt=\"No image (Magic only, via Scryfall)\" style=\"max-width:100%;max-height:100%;border-radius:4.75%\">\n</div>"
+        "content": "<div style=\"height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px\">\n  <img src=\"https://api.scryfall.com/cards/cardmarket/${card}?format=image&version=normal\"\n       alt=\"No image (Magic only, via Scryfall)\" style=\"max-width:100%;min-height:0;flex:1 1 auto;object-fit:contain;border-radius:4.75%\">\n  <a href=\"https://www.cardmarket.com/en/${site}/Products?idProduct=${card}\" target=\"_blank\" rel=\"noopener noreferrer\">Open on Cardmarket</a>\n</div>"
       }
     },
     {
