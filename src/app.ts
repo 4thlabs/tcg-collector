@@ -10,6 +10,8 @@ import { LoggerFactory, type LogFormat, type Logger } from "./logging/logger-fac
 import { FingerprintLedger } from "./storage/fingerprint-ledger.ts";
 import { SnapshotArchive } from "./storage/snapshot-archive.ts";
 import { CardCatalog } from "./web/card-catalog.ts";
+import { CardImages } from "./web/card-images.ts";
+import { CatalogIndexes } from "./web/catalog-indexes.ts";
 import { WebServer } from "./web/web-server.ts";
 
 export interface AppOptions {
@@ -54,9 +56,15 @@ export class App {
     }
   }
 
-  /** Web server of the card page, reading InfluxDB for as long as the process runs. */
+  /** Web server of the card page, reading InfluxDB for as long as the process runs; card images are cached in data/images. */
   createWebServer(): WebServer {
-    return new WebServer(new CardCatalog(new InfluxReader(this.influxSettings())), this.logger);
+    const catalog = new CardCatalog(new InfluxReader(this.influxSettings()));
+    return new WebServer({
+      catalog,
+      indexes: new CatalogIndexes(catalog, this.logger),
+      images: new CardImages(join(this.options.dataDir, "images")),
+      logger: this.logger,
+    });
   }
 
   /** The token only comes from INFLUX_TOKEN, never the command line. */

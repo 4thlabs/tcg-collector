@@ -36,6 +36,9 @@ services:
       INFLUX_URL: "http://tcg-collector-influxdb:8181"
       INFLUX_DATABASE: "cardmarket"
       INFLUX_TOKEN: "${TCG_COLLECTOR_INFLUX_TOKEN:?set TCG_COLLECTOR_INFLUX_TOKEN in .env}"
+    # Card images fetched from Scryfall are kept in ./data/images.
+    volumes:
+      - ./data:/app/data
 
   # InfluxDB 3 Core, Parquet files in ./influxdb. The database is created by the first write.
   tcg-collector-influxdb:
