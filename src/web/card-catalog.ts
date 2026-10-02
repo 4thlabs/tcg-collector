@@ -21,7 +21,7 @@ export interface TrendRecord {
 }
 
 /** Price fields shown by the card sheet, in euros. Cardmarket's 0 (no offer) comes back as null. */
-export const priceFields = ["low", "trend", "avg30", "low_foil", "trend_foil", "avg30_foil"] as const;
+export const priceFields = ["low", "trend", "avg30", "low_foil", "trend_foil", "avg1_foil", "avg30_foil"] as const;
 export type PriceField = (typeof priceFields)[number];
 export type Prices = { day: string } & Record<PriceField, number | null>;
 
