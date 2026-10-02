@@ -9,4 +9,4 @@ Images come from [Scryfall](https://scryfall.com/docs/api/cards/cardmarket), whi
 1. Add an **InfluxDB** datasource with query language **SQL**: URL `http://<host>:8181`, database `cardmarket`, token `TCG_COLLECTOR_INFLUX_TOKEN` (from `.env`), and **Insecure Connection** enabled (InfluxDB 3 Core of the compose file has no TLS).
 2. Dashboards > New > Import, upload `card.json`, and pick that datasource for "Cardmarket".
 
-Tested with Grafana 13.2.
+Tested with Grafana 11.6 and 13.2.
