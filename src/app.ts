@@ -11,6 +11,8 @@ import { FingerprintLedger } from "./storage/fingerprint-ledger.ts";
 import { SnapshotArchive } from "./storage/snapshot-archive.ts";
 import { CardCatalog } from "./web/card-catalog.ts";
 import { CardImages } from "./web/card-images.ts";
+import { type ImageSource, ScryfallImages, SwuImages } from "./web/image-sources.ts";
+import { PoliteHttp } from "./web/polite-http.ts";
 import { CatalogIndexes } from "./web/catalog-indexes.ts";
 import { WebServer } from "./web/web-server.ts";
 
@@ -59,10 +61,15 @@ export class App {
   /** Web server of the card page, reading InfluxDB for as long as the process runs; card images are cached in data/images. */
   createWebServer(): WebServer {
     const catalog = new CardCatalog(new InfluxReader(this.influxSettings()));
+    const http = new PoliteHttp();
+    const sources = new Map<string, ImageSource>([
+      ["1", new ScryfallImages()],
+      ["21", new SwuImages(http)],
+    ]);
     return new WebServer({
       catalog,
       indexes: new CatalogIndexes(catalog, this.logger),
-      images: new CardImages(join(this.options.dataDir, "images")),
+      images: new CardImages(join(this.options.dataDir, "images"), http, sources),
       logger: this.logger,
     });
   }

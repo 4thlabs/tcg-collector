@@ -37,9 +37,9 @@ class Api {
     return (await this.get("api/daily", { game, product, days })).days;
   }
 
-  /** Only Magic has images (Scryfall, cached by the server). */
+  /** Card image, cached by the server (Scryfall for Magic, starwarsunlimited.com for Star Wars Unlimited); 404 when there is none. */
   imageUrl(game, product, size) {
-    return game === "1" ? `api/image?${new URLSearchParams({ game, product, size })}` : null;
+    return `api/image?${new URLSearchParams({ game, product, size })}`;
   }
 }
 

@@ -1,72 +1,70 @@
-// Card images, fetched once from Scryfall (Magic only) and kept on disk, so the list never hits Scryfall twice.
+// Card images, fetched once from each game's image source and kept on disk, so the list never fetches an image twice.
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import ky, { type KyInstance } from "ky";
+import type { CardEntry } from "./catalog-index.ts";
+import type { ImageSource } from "./image-sources.ts";
+import type { PoliteHttp } from "./polite-http.ts";
 
 export type ImageSize = "small" | "normal";
 
+export interface CardImage {
+  bytes: Buffer;
+  type: string;
+}
+
 export class CardImages {
   static readonly sizes: readonly ImageSize[] = ["small", "normal"];
-  /** Scryfall asks for 50 to 100 ms between requests. */
-  static readonly spacingMs = 100;
+  /** Image types kept, by file extension. */
+  private static readonly types = new Map([
+    ["jpg", "image/jpeg"],
+    ["png", "image/png"],
+    ["webp", "image/webp"],
+  ]);
 
   private readonly folder: string;
-  private readonly http: KyInstance;
+  private readonly http: PoliteHttp;
+  /** Image source by Cardmarket game id. */
+  private readonly sources: Map<string, ImageSource>;
   /** Requests in flight, so a card asked twice at once is fetched once. */
-  private readonly pending = new Map<string, Promise<Buffer | null>>();
-  /** End of the last request slot: requests start one after another, spacingMs apart. */
-  private nextSlot = 0;
+  private readonly pending = new Map<string, Promise<CardImage | null>>();
 
-  constructor(folder: string, http?: KyInstance) {
+  constructor(folder: string, http: PoliteHttp, sources: Map<string, ImageSource>) {
     this.folder = folder;
-    this.http =
-      http ??
-      ky.create({
-        timeout: 20_000,
-        // Scryfall requires an identifying User-Agent and an Accept header.
-        headers: { "user-agent": "tcg-collector (https://github.com/4thlabs/tcg-collector)", accept: "image/*" },
-        retry: { limit: 2, statusCodes: [429, 500, 502, 503, 504] },
-      });
+    this.http = http;
+    this.sources = sources;
   }
 
-  /** JPEG bytes of a card's image, or null when the game has no image source or the card has no image. */
-  async get(game: string, product: string, size: ImageSize): Promise<Buffer | null> {
-    if (game !== "1") return null;
-    const key = `${game}/${size}/${product}`;
+  /** The card's image, or null when its game has no image source or the source has no image for it. */
+  async get(game: string, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
+    const source = this.sources.get(game);
+    if (!source) return null;
+    const key = `${game}/${size}/${card.product}`;
     const running = this.pending.get(key);
     if (running) return running;
-    const loading = this.load(game, product, size).finally(() => this.pending.delete(key));
+    const loading = this.load(source, join(this.folder, game, size, card.product), card, size).finally(() => this.pending.delete(key));
     this.pending.set(key, loading);
     return loading;
   }
 
-  private async load(game: string, product: string, size: ImageSize): Promise<Buffer | null> {
-    const path = join(this.folder, game, size, `${product}.jpg`);
-    const missing = join(this.folder, game, size, `${product}.none`);
-    const cached = await CardImages.readIfPresent(path);
-    if (cached) return cached;
-    if (await CardImages.readIfPresent(missing)) return null;
+  /** `base` is the cache path without extension: base.jpg (or .png…) holds the image, base.none marks a card without image. */
+  private async load(source: ImageSource, base: string, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
+    for (const [extension, type] of CardImages.types) {
+      const bytes = await CardImages.readIfPresent(`${base}.${extension}`);
+      if (bytes) return { bytes, type };
+    }
+    if (await CardImages.readIfPresent(`${base}.none`)) return null;
 
-    await this.waitForSlot();
-    // Scryfall finds Magic cards by their Cardmarket idProduct and redirects to the image.
-    const response = await this.http.get(`https://api.scryfall.com/cards/cardmarket/${product}`, {
-      searchParams: { format: "image", version: size },
-      throwHttpErrors: (status) => status !== 404,
-    });
-    if (response.status === 404) {
-      await CardImages.writeAtomically(missing, Buffer.from("no image on Scryfall\n"));
+    const url = await source.imageUrl(card, size);
+    const response = url ? await this.http.get(url, { headers: { accept: "image/*" } }) : null;
+    const type = response?.headers.get("content-type")?.split(";")[0].trim() ?? "";
+    const extension = [...CardImages.types].find(([, known]) => known === type)?.[0];
+    if (!response || response.status === 404 || !extension) {
+      await CardImages.writeAtomically(`${base}.none`, Buffer.from("no image\n"));
       return null;
     }
     const bytes = Buffer.from(await response.arrayBuffer());
-    await CardImages.writeAtomically(path, bytes);
-    return bytes;
-  }
-
-  private async waitForSlot(): Promise<void> {
-    const now = Date.now();
-    const start = Math.max(now, this.nextSlot);
-    this.nextSlot = start + CardImages.spacingMs;
-    if (start > now) await new Promise((resolve) => setTimeout(resolve, start - now));
+    await CardImages.writeAtomically(`${base}.${extension}`, bytes);
+    return { bytes, type };
   }
 
   private static async readIfPresent(path: string): Promise<Buffer | null> {

@@ -8,6 +8,7 @@ import { LoggerFactory } from "../src/logging/logger-factory.ts";
 import { CardCatalog, type Prices, type ProductRecord, type TrendRecord } from "../src/web/card-catalog.ts";
 import { CardImages } from "../src/web/card-images.ts";
 import type { SearchResult } from "../src/web/catalog-index.ts";
+import { PoliteHttp } from "../src/web/polite-http.ts";
 import { CatalogIndexes } from "../src/web/catalog-indexes.ts";
 import { WebServer } from "../src/web/web-server.ts";
 
@@ -46,7 +47,7 @@ let server: WebServer;
 let base = "";
 
 before(async () => {
-  const images = new CardImages(await mkdtemp(join(tmpdir(), "images-")));
+  const images = new CardImages(await mkdtemp(join(tmpdir(), "images-")), new PoliteHttp(), new Map());
   server = new WebServer({ catalog, indexes: new CatalogIndexes(catalog, logger), images, logger });
   base = `http://127.0.0.1:${await server.listen(0, "127.0.0.1")}`;
 });

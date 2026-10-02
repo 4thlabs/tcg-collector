@@ -112,7 +112,7 @@ The container collects (and imports) on start, then every day at `COLLECT_AT` (U
 - Search is fuzzy, with [MiniSearch](https://github.com/lucaong/minisearch): words in any order, matched as prefixes ("sol rin" finds Sol Ring), and one or two typos are forgiven when nothing matches as typed. The index of a game is built in memory on first use (a few seconds for Magic's 128,000 products) and rebuilt in the background every hour.
 - Filters: expansion, single cards or sealed products, trend price range; sorted by best match, trend price or newest.
 - Each product shows its expansion and version. Cardmarket's files have no expansion names, so an expansion is named after its sealed products ("Expansion <id>" when it has none); V.1, V.2… number the products with the same name in one expansion by idProduct, as Cardmarket does.
-- Images come from [Scryfall](https://scryfall.com), which finds Magic cards by their Cardmarket idProduct. Each image is fetched once and kept in `data/images/` (a `.none` file marks a card Scryfall has no image for). Other games have no image yet.
+- Images: Magic cards come from [Scryfall](https://scryfall.com), which finds them by their Cardmarket idProduct. Star Wars Unlimited cards come from the official card database ([starwarsunlimited.com](https://starwarsunlimited.com/cards)), which has no Cardmarket id: a product is matched by set and "Title, Subtitle", Hyperspace and Showcase printings by Cardmarket's Hyperspace expansion and foil price (`src/web/image-sources.ts` holds the expansion table, to extend with each new set). Promos show the art of any printing of the card. Each image is fetched once and kept in `data/images/` (a `.none` file marks a card without image).
 - The page state (game, search, filters, open card) is in the address, so a search or a card can be bookmarked.
 - No login: serve it on your own network only.
 
@@ -154,7 +154,9 @@ src/web/web-server.ts                HTTP server of the card page: static files 
 src/web/card-catalog.ts              InfluxDB queries: products, latest trends, latest and daily prices
 src/web/catalog-index.ts             in-memory search index of a game: fuzzy search, filters, versions
 src/web/catalog-indexes.ts           one index per game, rebuilt in the background every hour
-src/web/card-images.ts               card images from Scryfall, cached on disk
+src/web/card-images.ts               card images, fetched once and cached on disk
+src/web/image-sources.ts             image source of each game: Scryfall, starwarsunlimited.com
+src/web/polite-http.ts               HTTP client for the image sites, requests spaced 100 ms apart
 src/web/expansion-label.ts           expansion name guessed from its sealed products
 web/                                 the card page: index.html, style.css, app.js (browser code)
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
