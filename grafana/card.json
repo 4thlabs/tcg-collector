@@ -64,8 +64,8 @@
         "refresh": 1,
         "query": {
           "refId": "card",
-          "rawSql": "SELECT concat(name, ' · ', substr(date_added, 1, 10), ' · ', product) AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200",
-          "query": "SELECT concat(name, ' · ', substr(date_added, 1, 10), ' · ', product) AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200"
+          "rawSql": "SELECT arrow_cast(concat(name, ' · ', substr(date_added, 1, 10), ' · ', product), 'Utf8') AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200",
+          "query": "SELECT arrow_cast(concat(name, ' · ', substr(date_added, 1, 10), ' · ', product), 'Utf8') AS card\nFROM (SELECT DISTINCT ON (product) product, name, date_added FROM product\n      WHERE game = '${game}' ORDER BY product, time DESC)\nWHERE name ILIKE concat('%', ${search:sqlstring}, '%')\nORDER BY date_added DESC LIMIT 200"
         },
         "regex": "/^(?<text>.* · .*) · (?<value>\\d+)$/",
         "sort": 0
