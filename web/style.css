@@ -67,7 +67,7 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 @media (max-width: 620px) { .sheet { grid-template-columns: minmax(0, 1fr); padding: 16px; } .art { max-width: 240px; } }
 .close { position: absolute; top: 8px; right: 10px; font-size: 1.6rem; line-height: 1; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 4px 8px; }
 .art { margin: 0; }
-.art img { display: block; width: 100%; height: auto; border-radius: 4.75% / 3.5%; background: var(--line); aspect-ratio: 488 / 680; }
+.art img { display: block; width: 100%; height: auto; border-radius: 4.75% / 3.5%; background: var(--line); aspect-ratio: auto 488 / 680; }
 .facts { display: grid; gap: 14px; align-content: start; min-width: 0; padding-right: 24px; }
 .chart-area { grid-column: 1 / -1; display: grid; gap: 10px; min-width: 0; }
 .sheet h2 { font-size: 1.35rem; font-weight: 800; margin: 0; overflow-wrap: anywhere; }

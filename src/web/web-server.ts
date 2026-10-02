@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Logger } from "../logging/logger-factory.ts";
 import type { CardCatalog } from "./card-catalog.ts";
-import type { CardImages, ImageSize } from "./card-images.ts";
+import { CardImages, type ImageSize } from "./card-images.ts";
 import type { ProductKind, SearchRequest, SortOrder } from "./catalog-index.ts";
 import type { CatalogIndexes } from "./catalog-indexes.ts";
 
@@ -103,14 +103,16 @@ export class WebServer {
     }
   }
 
-  /** /api/image?game&product&size: the card's JPEG, or 404 when it has none. Images never change: cached a week. */
+  /** /api/image?game&product&size: the card's image, or 404 when it has none. Images never change: cached a week. */
   private async image(query: URLSearchParams, response: ServerResponse): Promise<void> {
     const size = query.get("size") ?? "small";
-    if (!(["small", "normal"] as const).includes(size as ImageSize)) throw new BadRequest("size must be small or normal");
-    const bytes = await this.parts.images.get(WebServer.id(query, "game"), WebServer.id(query, "product"), size as ImageSize);
-    if (!bytes) return this.sendJson(response, 404, { error: "No image" });
-    response.writeHead(200, { "content-type": "image/jpeg", "cache-control": "max-age=604800" });
-    response.end(bytes);
+    if (!CardImages.sizes.includes(size as ImageSize)) throw new BadRequest("size must be small or normal");
+    const game = WebServer.id(query, "game");
+    const card = (await this.parts.indexes.get(game)).card(WebServer.id(query, "product"));
+    const image = card ? await this.parts.images.get(game, card, size as ImageSize) : null;
+    if (!image) return this.sendJson(response, 404, { error: "No image" });
+    response.writeHead(200, { "content-type": image.type, "cache-control": "max-age=604800" });
+    response.end(image.bytes);
   }
 
   private static searchRequest(query: URLSearchParams): SearchRequest {
