@@ -226,9 +226,10 @@ class PriceChart {
     { field: "low", label: "Low", color: "--accent", line: "solid" },
     { field: "trend", label: "Trend", color: "--fg", line: "solid" },
     { field: "avg30", label: "30-day avg", color: "--muted", line: "dashed" },
+    // The 1-day averages follow the day's sales, so they are noisier: thin dotted lines.
+    { field: "avg1", label: "1-day avg", color: "--fg", line: "dotted" },
     { field: "low_foil", label: "Low foil", color: "--foil", line: "dashed" },
     { field: "trend_foil", label: "Trend foil", color: "--foil", line: "solid" },
-    // The 1-day average follows the day's sales, so it is noisier: thin dotted line.
     { field: "avg1_foil", label: "1-day avg foil", color: "--foil", line: "dotted" },
   ];
 
