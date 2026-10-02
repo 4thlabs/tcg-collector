@@ -1,4 +1,4 @@
-# Cardmarket collector: runs the collection every day at COLLECT_AT (UTC).
+# Cardmarket collector: runs the collection every day at COLLECT_AT (UTC). The same image serves the card page (command serve).
 FROM node:24-alpine
 
 WORKDIR /app
@@ -11,6 +11,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
+COPY web ./web
 
 # Archives and the ledger live in a volume, outside the image.
 # No dedicated user: a folder mounted from the host is often owned by root.

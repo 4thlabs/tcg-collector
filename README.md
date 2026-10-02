@@ -40,10 +40,11 @@ node src/cli.ts collect                # one collection, every game
 node src/cli.ts collect --games 1,21   # Magic and Star Wars Unlimited only
 node src/cli.ts schedule --at 12:00    # collect every day at 12:00 UTC, without stopping
 INFLUX_TOKEN=apiv3_... node src/cli.ts --influx-url http://localhost:8181 import --games 1,21
+INFLUX_TOKEN=apiv3_... node src/cli.ts --influx-url http://localhost:8181 serve --port 8080
 node src/cli.ts --help
 ```
 
-Global options: `--data-dir` (default `data`), `--base-url`, `--influx-url`, `--influx-database` (default `cardmarket`), `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `DATA_DIR`, `CARDMARKET_BASE_URL`, `INFLUX_URL`, `INFLUX_DATABASE`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The InfluxDB token only comes from `INFLUX_TOKEN`, so it never shows in a command line.
+Global options: `--data-dir` (default `data`), `--base-url`, `--influx-url`, `--influx-database` (default `cardmarket`), `--log-level` (`error`, `warn`, `info`, `debug`; default `info`), `--log-format` (`text` or `json`; default `text`). Equivalent environment variables: `PORT` and `HOST` (serve), `DATA_DIR`, `CARDMARKET_BASE_URL`, `INFLUX_URL`, `INFLUX_DATABASE`, `LOG_LEVEL`, `LOG_FORMAT`, `GAMES`, `IMPORT_GAMES`, `COLLECT_AT`. The InfluxDB token only comes from `INFLUX_TOKEN`, so it never shows in a command line.
 
 Logs go through [Winston](https://github.com/winstonjs/winston) to the console: `info` shows archived files and the summary of each collection, `warn` a file that failed, `debug` also the unchanged and absent files. `--log-format json` writes one JSON object per line, for a log collector.
 
@@ -84,7 +85,7 @@ curl -G http://localhost:8181/api/v3/query_sql -H "Authorization: Bearer $INFLUX
 
 The CI builds the image and publishes it to `ghcr.io/4thlabs/tcg-collector` (tags `latest` and `sha-<commit>`) on every commit to `main`.
 
-`compose.yaml` runs the collector and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token in `TCG_COLLECTOR_INFLUX_TOKEN` (passed to both containers as `INFLUX_TOKEN`): InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
+`compose.yaml` runs the collector, the card page (port 8080, same image, command `serve`) and an InfluxDB 3 Core (HTTP API on port 8181, Parquet files in `./influxdb`). Before the first start, copy `.env.example` to `.env` and set the admin token in `TCG_COLLECTOR_INFLUX_TOKEN` (passed to both containers as `INFLUX_TOKEN`): InfluxDB loads it on its first start, the collector uses it to write, Grafana can use it to read. Settings in the compose file, tuned for one write a day:
 
 - `INFLUXDB3_WAL_FILES_PER_SNAPSHOT=10`: the day's points are persisted to Parquet right after the import, instead of staying in memory for weeks (by default, until 600 write requests).
 - `INFLUXDB3_QUERY_FILE_LIMIT=10000`: Core does not compact, so each day of prices is its own Parquet file and a query over N days reads N files; the default limit would reject queries over long periods.
@@ -104,6 +105,16 @@ If the ghcr.io package is private, log in first: `docker login ghcr.io` (GitHub 
 
 The container collects (and imports) on start, then every day at `COLLECT_AT` (UTC), and restarts on its own. Archives are in `./data` on the host. Restarting the container creates no duplicates: the ledger skips files already archived.
 
+## Card page
+
+`serve` runs a small web page, read live from InfluxDB: search a card by name, pick the printing, and see its image, latest prices and daily prices, with a link to its Cardmarket page.
+
+- The list shows each product with its expansion and version. Cardmarket's files have no expansion names, so an expansion is named after its sealed products ("Expansion <id>" when it has none); V.1, V.2… number the products with the same name in one expansion by idProduct, as Cardmarket does.
+- Images come from [Scryfall](https://scryfall.com), which finds Magic cards by their Cardmarket idProduct. Other games have no image yet.
+- No login: serve it on your own network only.
+
+The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers three JSON routes: `/api/search?game&q`, `/api/prices?game&product` and `/api/daily?game&product&days`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
+
 ## Grafana
 
 `grafana/card.json` is a dashboard to import into Grafana: price history and image of one card, found by name. See [grafana/README.md](grafana/README.md).
@@ -121,7 +132,7 @@ The container collects (and imports) on start, then every day at `COLLECT_AT` (U
 ```
 src/cli.ts                           Commander entry point
 src/app.ts                           dependency wiring
-src/commands/                        one class per command (collect, schedule, import, games)
+src/commands/                        one class per command (collect, schedule, import, serve, games)
 src/cardmarket/feed-file.ts          file types and server paths
 src/cardmarket/feed-content.ts       content of the price guide and catalogue files
 src/cardmarket/cardmarket-client.ts  HEAD / GET through ky (retries, timeout)
@@ -135,6 +146,11 @@ src/import/price-point-factory.ts    price guide line -> InfluxDB point
 src/import/product-point-factory.ts  catalogue line -> InfluxDB point, change detection
 src/import/import-ledger.ts          last imported day per file
 src/influx/influx-writer.ts          batched writes through the official InfluxDB 3 client
+src/influx/influx-reader.ts          SQL queries with parameters, through the same client
+src/web/web-server.ts                HTTP server of the card page: static files and JSON API
+src/web/card-catalog.ts              card search, latest and daily prices, version numbers
+src/web/expansion-label.ts           expansion name guessed from its sealed products
+web/                                 the card page: index.html, style.css, app.js (browser code)
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
 ```
 

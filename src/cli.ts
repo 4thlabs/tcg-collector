@@ -7,6 +7,7 @@ import { CollectCommand } from "./commands/collect-command.ts";
 import { GamesCommand } from "./commands/games-command.ts";
 import { ImportCommand } from "./commands/import-command.ts";
 import { ScheduleCommand } from "./commands/schedule-command.ts";
+import { ServeCommand } from "./commands/serve-command.ts";
 import { type LogFormat, LoggerFactory } from "./logging/logger-factory.ts";
 
 interface GlobalOptions {
@@ -34,7 +35,7 @@ class Cli {
 
     // Commands read the global options when they run, after the command line has been parsed.
     const app = () => new App(this.program.opts<GlobalOptions>());
-    for (const command of [new CollectCommand(app), new ScheduleCommand(app), new ImportCommand(app), new GamesCommand(app)]) command.register(this.program);
+    for (const command of [new CollectCommand(app), new ScheduleCommand(app), new ImportCommand(app), new ServeCommand(app), new GamesCommand(app)]) command.register(this.program);
   }
 
   async run(argv: readonly string[]): Promise<void> {
