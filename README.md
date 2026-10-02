@@ -107,13 +107,16 @@ The container collects (and imports) on start, then every day at `COLLECT_AT` (U
 
 ## Card page
 
-`serve` runs a small web page, read live from InfluxDB: search a card by name, pick the printing, and see its image, latest prices and daily prices, with a link to its Cardmarket page.
+`serve` runs a small web page, read live from InfluxDB: search products by name with filters, see them in a list with their image and trend price, and click one to open its sheet with the latest prices, daily prices chart and a link to its Cardmarket page.
 
-- The list shows each product with its expansion and version. Cardmarket's files have no expansion names, so an expansion is named after its sealed products ("Expansion <id>" when it has none); V.1, V.2… number the products with the same name in one expansion by idProduct, as Cardmarket does.
-- Images come from [Scryfall](https://scryfall.com), which finds Magic cards by their Cardmarket idProduct. Other games have no image yet.
+- Search is fuzzy, with [MiniSearch](https://github.com/lucaong/minisearch): words in any order, matched as prefixes ("sol rin" finds Sol Ring), and one or two typos are forgiven when nothing matches as typed. The index of a game is built in memory on first use (a few seconds for Magic's 128,000 products) and rebuilt in the background every hour.
+- Filters: expansion, single cards or sealed products, trend price range; sorted by best match, trend price or newest.
+- Each product shows its expansion and version. Cardmarket's files have no expansion names, so an expansion is named after its sealed products ("Expansion <id>" when it has none); V.1, V.2… number the products with the same name in one expansion by idProduct, as Cardmarket does.
+- Images come from [Scryfall](https://scryfall.com), which finds Magic cards by their Cardmarket idProduct. Each image is fetched once and kept in `data/images/` (a `.none` file marks a card Scryfall has no image for). Other games have no image yet.
+- The page state (game, search, filters, open card) is in the address, so a search or a card can be bookmarked.
 - No login: serve it on your own network only.
 
-The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers three JSON routes: `/api/search?game&q`, `/api/prices?game&product` and `/api/daily?game&product&days`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
+The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers JSON routes `/api/search?game&q&expansion&kind&min&max&sort&offset&limit`, `/api/card?game&product`, `/api/expansions?game`, `/api/prices?game&product` and `/api/daily?game&product&days`, plus the images at `/api/image?game&product&size`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
 
 ## Grafana
 
@@ -148,7 +151,10 @@ src/import/import-ledger.ts          last imported day per file
 src/influx/influx-writer.ts          batched writes through the official InfluxDB 3 client
 src/influx/influx-reader.ts          SQL queries with parameters, through the same client
 src/web/web-server.ts                HTTP server of the card page: static files and JSON API
-src/web/card-catalog.ts              card search, latest and daily prices, version numbers
+src/web/card-catalog.ts              InfluxDB queries: products, latest trends, latest and daily prices
+src/web/catalog-index.ts             in-memory search index of a game: fuzzy search, filters, versions
+src/web/catalog-indexes.ts           one index per game, rebuilt in the background every hour
+src/web/card-images.ts               card images from Scryfall, cached on disk
 src/web/expansion-label.ts           expansion name guessed from its sealed products
 web/                                 the card page: index.html, style.css, app.js (browser code)
 src/logging/logger-factory.ts        Winston loggers (text or JSON)

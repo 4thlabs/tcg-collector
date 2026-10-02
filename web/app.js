@@ -1,4 +1,5 @@
-// Card page: searches a card through the tcg-collector API and shows its latest and daily Cardmarket prices.
+// Card page: searches the catalogue through the tcg-collector API, lists the cards with image and trend price,
+// and opens a card's sheet (latest prices, daily chart) on click.
 // Plain browser JavaScript, no build step; Chart.js is served by the same server (vendor/chart.js).
 "use strict";
 
@@ -16,8 +17,16 @@ class Api {
     return body;
   }
 
-  async search(game, q) {
-    return (await this.get("api/search", { game, q })).cards;
+  search(params) {
+    return this.get("api/search", params);
+  }
+
+  async card(game, product) {
+    return (await this.get("api/card", { game, product })).card;
+  }
+
+  async expansions(game) {
+    return (await this.get("api/expansions", { game })).expansions;
   }
 
   async latestPrices(game, product) {
@@ -27,29 +36,36 @@ class Api {
   async dailyPrices(game, product, days) {
     return (await this.get("api/daily", { game, product, days })).days;
   }
-}
 
-/** Per-browser preferences (game, search, period, card); the page works without them. */
-class Preferences {
-  read(key, fallback = null) {
-    try {
-      const value = localStorage.getItem(`cards.${key}`);
-      return value === null ? fallback : JSON.parse(value);
-    } catch {
-      return fallback;
-    }
-  }
-
-  write(key, value) {
-    try {
-      localStorage.setItem(`cards.${key}`, JSON.stringify(value));
-    } catch {
-      // Storage unavailable (private window): nothing to keep.
-    }
+  /** Only Magic has images (Scryfall, cached by the server). */
+  imageUrl(game, product, size) {
+    return game === "1" ? `api/image?${new URLSearchParams({ game, product, size })}` : null;
   }
 }
 
-/** Display helpers shared by the panels. */
+/** The page's state lives in the address, so a search or a card can be bookmarked and the back button works. */
+class PageState {
+  static fields = ["game", "q", "expansion", "kind", "min", "max", "sort", "card"];
+  static defaults = { game: "1", q: "", expansion: "", kind: "all", min: "", max: "", sort: "relevance", card: "" };
+
+  static read() {
+    const params = new URLSearchParams(location.search);
+    const state = { ...PageState.defaults };
+    for (const field of PageState.fields) if (params.has(field)) state[field] = params.get(field);
+    if (!GAMES[state.game]) state.game = PageState.defaults.game;
+    return state;
+  }
+
+  static write(state, push = false) {
+    const params = new URLSearchParams();
+    for (const field of PageState.fields) if (state[field] && state[field] !== PageState.defaults[field]) params.set(field, state[field]);
+    const url = params.size ? `?${params}` : location.pathname;
+    if (push) history.pushState(null, "", url);
+    else history.replaceState(null, "", url);
+  }
+}
+
+/** Display helpers shared by the list and the sheet. */
 class Format {
   static euro = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" });
 
@@ -65,97 +81,146 @@ class Format {
     return card.version == null ? "" : `V.${card.version}`;
   }
 
-  /** Card image: Scryfall knows Magic cards by their Cardmarket idProduct; nothing for other games yet. */
-  static imageUrl(game, card) {
-    return game === "1" ? `https://api.scryfall.com/cards/cardmarket/${encodeURIComponent(card.product)}?format=image&version=normal` : null;
-  }
-
   static cardmarketUrl(game, card) {
     return `https://www.cardmarket.com/en/${GAMES[game].cardmarket}/Products?idProduct=${encodeURIComponent(card.product)}`;
   }
+
+  /** Name with its version badge. */
+  static nameInto(element, card) {
+    element.textContent = card.name;
+    if (card.version == null) return;
+    const badge = document.createElement("span");
+    badge.className = "version";
+    badge.textContent = Format.version(card);
+    element.append(badge);
+  }
 }
 
-/** Left rail: search box results, one line per product. */
-class SearchPanel {
-  static minLength = 3;
-
-  constructor(api, onSelect) {
+/** The filter form: reads and writes the filter part of the state, and fills the expansion list per game. */
+class Filters {
+  constructor(api, onChange) {
     this.api = api;
-    this.onSelect = onSelect;
-    this.list = document.getElementById("results");
-    this.note = document.getElementById("rail-note");
-    this.count = document.getElementById("count");
-    this.template = document.getElementById("result-template");
-    this.sequence = 0;
-    this.cards = [];
-    this.selected = null;
+    this.form = document.getElementById("filters");
+    this.expansionSelect = this.form.elements.expansion;
+    this.loadedGame = null;
+    let timer = null;
+    // Typing waits a little; lists apply at once.
+    this.form.addEventListener("input", (event) => {
+      clearTimeout(timer);
+      const delay = event.target.tagName === "SELECT" ? 0 : 300;
+      timer = setTimeout(onChange, delay);
+    });
+    this.form.addEventListener("submit", (event) => event.preventDefault());
   }
 
-  /** Runs a search; answers to older searches are dropped. */
-  async search(game, text) {
-    const sequence = ++this.sequence;
-    if (text.length < SearchPanel.minLength) {
-      this.show([], "Type at least 3 letters of a card name.");
-      return;
-    }
-    this.showNote("Searching…");
+  values() {
+    const elements = this.form.elements;
+    return {
+      q: elements.q.value.trim(),
+      expansion: elements.expansion.value,
+      kind: elements.kind.value,
+      min: elements.min.value,
+      max: elements.max.value,
+      sort: elements.sort.value,
+    };
+  }
+
+  show(state) {
+    for (const field of ["q", "kind", "min", "max", "sort"]) this.form.elements[field].value = state[field];
+    this.expansionSelect.value = state.expansion;
+  }
+
+  /** Loads the expansions of the game (newest first), keeping the selected one. */
+  async loadExpansions(game, selected) {
+    if (this.loadedGame === game) return;
+    this.loadedGame = game;
+    const first = this.expansionSelect.options[0];
+    this.expansionSelect.replaceChildren(first);
     try {
-      const cards = await this.api.search(game, text);
-      if (sequence !== this.sequence) return;
-      this.show(cards, `No ${GAMES[game].name} card contains “${text}”.`);
-    } catch (error) {
-      if (sequence === this.sequence) this.show([], `Search failed: ${error.message}.`, true);
+      const expansions = await this.api.expansions(game);
+      if (this.loadedGame !== game) return;
+      this.expansionSelect.append(...expansions.map((expansion) => new Option(`${expansion.label} (${expansion.count})`, String(expansion.id))));
+    } catch {
+      // The list still works without the expansion filter.
     }
+    this.expansionSelect.value = selected;
+  }
+}
+
+/** The grid of results, with "Show more" paging. */
+class ResultList {
+  static pageSize = 60;
+
+  constructor(api, onOpen) {
+    this.api = api;
+    this.onOpen = onOpen;
+    this.list = document.getElementById("cards");
+    this.summary = document.getElementById("summary");
+    this.more = document.getElementById("more");
+    this.template = document.getElementById("card-template");
+    this.sequence = 0;
+    this.params = null;
+    this.shown = 0;
+    this.total = 0;
+    this.more.addEventListener("click", () => this.load(false));
   }
 
-  find(product) {
-    return this.cards.find((card) => card.product === product) ?? null;
+  /** New search: answers to older searches are dropped. */
+  search(params) {
+    this.params = params;
+    this.shown = 0;
+    return this.load(true);
   }
 
-  select(product) {
-    this.selected = product;
-    for (const item of this.list.children) item.setAttribute("aria-selected", String(item.dataset.product === product));
-  }
-
-  show(cards, emptyText, isError = false) {
-    this.cards = cards;
-    this.count.textContent = cards.length ? String(cards.length) : "";
-    this.list.replaceChildren(...cards.map((card) => this.item(card)));
-    this.showNote(cards.length ? null : emptyText, isError);
-  }
-
-  showNote(text, isError = false) {
-    this.note.hidden = !text;
-    this.note.textContent = text ?? "";
-    this.note.classList.toggle("err", isError);
+  async load(fresh) {
+    const sequence = ++this.sequence;
+    this.more.disabled = true;
+    if (fresh) this.summary.textContent = "Searching…";
+    try {
+      const result = await this.api.search({ ...this.params, offset: this.shown, limit: ResultList.pageSize });
+      if (sequence !== this.sequence) return;
+      const items = result.cards.map((card) => this.item(card));
+      if (fresh) this.list.replaceChildren(...items);
+      else this.list.append(...items);
+      this.shown += result.cards.length;
+      this.total = result.total;
+      this.summary.classList.remove("err");
+      this.summary.textContent = this.total === 0 ? "No product matches these filters." : `${this.total.toLocaleString("en")} products${this.total > this.shown ? `, ${this.shown} shown` : ""}`;
+      this.more.hidden = this.shown >= this.total;
+    } catch (error) {
+      if (sequence !== this.sequence) return;
+      this.summary.classList.add("err");
+      this.summary.textContent = `Search failed: ${error.message}.`;
+    } finally {
+      this.more.disabled = false;
+    }
   }
 
   item(card) {
     const item = this.template.content.firstElementChild.cloneNode(true);
-    item.dataset.product = card.product;
-    item.setAttribute("aria-selected", String(card.product === this.selected));
-    item.querySelector(".name").textContent = card.name;
-    if (card.version != null) {
-      const version = document.createElement("span");
-      version.className = "version";
-      version.textContent = Format.version(card);
-      item.querySelector(".name").append(version);
+    const game = this.params.game;
+    const thumb = item.querySelector(".thumb");
+    const imageUrl = this.api.imageUrl(game, card.product, "small");
+    // The first letter shows until the image loads, and stays when there is none.
+    thumb.textContent = card.name.slice(0, 1);
+    if (imageUrl) {
+      const image = new Image();
+      image.loading = "lazy";
+      image.alt = "";
+      image.addEventListener("error", () => image.remove());
+      image.src = imageUrl;
+      thumb.append(image);
     }
-    item.querySelector(".id").textContent = `#${card.product}`;
+    Format.nameInto(item.querySelector(".name"), card);
     item.querySelector(".expansion").textContent = Format.expansion(card);
-    item.querySelector(".added").textContent = card.added ? `added ${card.added}` : "";
-    item.addEventListener("click", () => this.onSelect(card));
-    item.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        this.onSelect(card);
-      }
-    });
+    item.querySelector(".trend").textContent = card.trend == null ? "no trend" : Format.price(card.trend);
+    item.querySelector(".low").textContent = [card.low != null && `low ${Format.price(card.low)}`, card.trendFoil != null && `foil ${Format.price(card.trendFoil)}`].filter(Boolean).join(" · ");
+    item.querySelector(".card").addEventListener("click", () => this.onOpen(card));
     return item;
   }
 }
 
-/** Line chart of the daily prices, redrawn with the theme's colors. */
+/** Line chart of the daily prices, drawn with the theme's colors. */
 class PriceChart {
   static series = [
     { field: "low", label: "Low", color: "--accent", dashed: false },
@@ -174,9 +239,7 @@ class PriceChart {
 
   draw(days) {
     this.days = days;
-    this.chart?.destroy();
-    this.chart = null;
-    this.note.replaceChildren();
+    this.clear();
     if (!days.length) return this.message("No price over this period.");
     if (!window.Chart) return this.message("The chart library could not load.", true);
     const color = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -232,6 +295,12 @@ class PriceChart {
     if (this.chart) this.draw(this.days);
   }
 
+  clear() {
+    this.chart?.destroy();
+    this.chart = null;
+    this.note.replaceChildren();
+  }
+
   message(text, isError = false) {
     const p = document.createElement("p");
     p.className = isError ? "note err" : "note";
@@ -240,7 +309,7 @@ class PriceChart {
   }
 }
 
-/** Right side: the selected card's image, latest prices and daily chart. */
+/** The selected card's sheet, in a dialog: image, latest prices and daily chart. */
 class CardSheet {
   static fields = [
     { field: "low", label: "Low", foil: false },
@@ -251,84 +320,95 @@ class CardSheet {
     { field: "avg30_foil", label: "30-day avg foil", foil: true },
   ];
 
-  constructor(api, preferences) {
+  constructor(api, onClose) {
     this.api = api;
-    this.preferences = preferences;
-    this.root = document.getElementById("sheet");
-    this.template = document.getElementById("sheet-template");
+    this.dialog = document.getElementById("sheet");
+    this.chart = new PriceChart(this.dialog.querySelector("canvas"), this.dialog.querySelector(".chart-note"));
+    this.range = this.dialog.querySelector(".range");
     this.card = null;
     this.game = null;
-    this.days = preferences.read("days", 90);
-    this.chart = null;
+    this.days = 90;
+    this.dialog.querySelector(".close").addEventListener("click", () => this.dialog.close());
+    // A click on the backdrop (outside the sheet) closes it.
+    this.dialog.addEventListener("click", (event) => {
+      if (event.target === this.dialog) this.dialog.close();
+    });
+    this.dialog.addEventListener("close", () => {
+      this.card = null;
+      this.chart.clear();
+      onClose();
+    });
+    this.range.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-days]");
+      if (!button) return;
+      this.days = Number(button.dataset.days);
+      this.showRange();
+      this.loadDaily();
+    });
   }
 
-  async show(game, card) {
+  get isOpen() {
+    return this.dialog.open;
+  }
+
+  /** Opens the sheet of a card from the list (or known only by its id when the server does not find it). */
+  open(game, card) {
     this.game = game;
     this.card = card;
     this.render();
-    await Promise.all([this.loadLatest(), this.loadDaily()]);
+    if (!this.dialog.open) this.dialog.showModal();
+    this.loadLatest();
+    this.loadDaily();
+  }
+
+  close() {
+    if (this.dialog.open) this.dialog.close();
   }
 
   render() {
     const { game, card } = this;
-    const sheet = this.template.content.firstElementChild.cloneNode(true);
-    const text = (selector, value) => (sheet.querySelector(selector).textContent = value);
-    text(".card-name", card.name);
+    const text = (selector, value) => (this.dialog.querySelector(selector).textContent = value);
+    Format.nameInto(this.dialog.querySelector(".card-name"), card);
     text(".card-game", GAMES[game].name);
     text(".card-id", card.product);
-    text(".card-expansion", [Format.expansion(card), Format.version(card)].filter(Boolean).join(" · "));
+    text(".card-expansion", card.expansionId === undefined ? "" : [Format.expansion(card), Format.version(card)].filter(Boolean).join(" · "));
     text(".card-added", card.added ? `added ${card.added}` : "");
-    sheet.querySelector(".card-link").href = Format.cardmarketUrl(game, card);
+    text(".asof", "");
+    this.dialog.querySelector(".card-link").href = Format.cardmarketUrl(game, card);
+    this.dialog.querySelector(".tiles").replaceChildren(CardSheet.note("Loading prices…"));
 
-    const imageUrl = Format.imageUrl(game, card);
-    const art = sheet.querySelector(".art");
-    if (imageUrl) {
-      const image = art.querySelector("img");
-      image.alt = card.name;
-      image.addEventListener("error", () => (art.hidden = true));
-      image.src = imageUrl;
-      art.hidden = false;
-    }
+    const art = this.dialog.querySelector(".art");
+    const image = art.querySelector("img");
+    const imageUrl = this.api.imageUrl(game, card.product, "normal");
+    art.hidden = !imageUrl;
+    image.onerror = () => (art.hidden = true);
+    image.alt = card.name;
+    image.src = imageUrl ?? "";
+    this.showRange();
+  }
 
-    const range = sheet.querySelector(".range");
-    for (const button of range.children) button.setAttribute("aria-pressed", String(Number(button.dataset.days) === this.days));
-    range.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-days]");
-      if (!button) return;
-      this.days = Number(button.dataset.days);
-      this.preferences.write("days", this.days);
-      for (const other of range.children) other.setAttribute("aria-pressed", String(other === button));
-      this.loadDaily();
-    });
-
-    this.chart = new PriceChart(sheet.querySelector("canvas"), sheet.querySelector(".chart-note"));
-    this.root.replaceChildren(sheet);
+  showRange() {
+    for (const button of this.range.children) button.setAttribute("aria-pressed", String(Number(button.dataset.days) === this.days));
   }
 
   async loadLatest() {
     const card = this.card;
-    const box = this.root.querySelector(".prices");
+    const tiles = this.dialog.querySelector(".tiles");
     try {
       const prices = await this.api.latestPrices(this.game, card.product);
       if (card !== this.card) return;
-      if (!prices) {
-        box.innerHTML = '<p class="note">No archived price for this card.</p>';
-        return;
-      }
-      box.replaceChildren(...CardSheet.fields.filter(({ field, foil }) => !foil || prices[field] != null).map((entry) => this.tile(entry, prices)));
-      this.root.querySelector(".asof").textContent = `Latest archived price guide: ${prices.day}`;
+      if (!prices) return tiles.replaceChildren(CardSheet.note("No archived price for this product."));
+      tiles.replaceChildren(...CardSheet.fields.filter(({ field, foil }) => !foil || prices[field] != null).map((entry) => CardSheet.tile(entry, prices)));
+      this.dialog.querySelector(".asof").textContent = `Latest archived price guide: ${prices.day}`;
     } catch (error) {
-      if (card !== this.card) return;
-      const p = document.createElement("p");
-      p.className = "note err";
-      p.textContent = `Prices failed: ${error.message}.`;
-      box.replaceChildren(p);
+      if (card === this.card) tiles.replaceChildren(CardSheet.note(`Prices failed: ${error.message}.`, true));
     }
   }
 
   async loadDaily() {
     const card = this.card;
     const days = this.days;
+    this.chart.clear();
     try {
       const rows = await this.api.dailyPrices(this.game, card.product, days);
       if (card === this.card && days === this.days) this.chart.draw(rows);
@@ -337,9 +417,9 @@ class CardSheet {
     }
   }
 
-  tile({ field, label, foil }, prices) {
+  static tile({ field, label, foil }, prices) {
     const tile = document.createElement("div");
-    tile.className = `price${foil ? " foil" : ""}${prices[field] == null ? " empty" : ""}`;
+    tile.className = `tile${foil ? " foil" : ""}${prices[field] == null ? " empty" : ""}`;
     const name = document.createElement("span");
     name.className = "label";
     name.textContent = label;
@@ -349,58 +429,83 @@ class CardSheet {
     tile.append(name, value);
     return tile;
   }
+
+  static note(text, isError = false) {
+    const p = document.createElement("p");
+    p.className = isError ? "note err" : "note";
+    p.textContent = text;
+    return p;
+  }
 }
 
-/** Wires the controls, the rail and the sheet; restores the last game, search and card. */
+/** Wires the game switch, the filters, the list and the sheet to the state in the address. */
 class CardPage {
   constructor() {
     this.api = new Api();
-    this.preferences = new Preferences();
-    this.game = this.preferences.read("game", "1");
-    if (!GAMES[this.game]) this.game = "1";
-    this.search = new SearchPanel(this.api, (card) => this.select(card));
-    this.sheet = new CardSheet(this.api, this.preferences);
-    this.query = document.getElementById("query");
+    this.state = PageState.read();
     this.gameButtons = document.getElementById("game");
-    this.timer = null;
+    this.filters = new Filters(this.api, () => this.filtersChanged());
+    this.results = new ResultList(this.api, (card) => this.openCard(card));
+    this.sheet = new CardSheet(this.api, () => this.sheetClosed());
   }
 
   async start() {
-    this.showGame();
-    this.query.value = this.preferences.read("query", "");
-    this.query.addEventListener("input", () => {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.runSearch(), 300);
-    });
     this.gameButtons.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-game]");
-      if (!button || button.dataset.game === this.game) return;
-      this.game = button.dataset.game;
-      this.preferences.write("game", this.game);
-      this.showGame();
-      this.runSearch();
+      if (!button || button.dataset.game === this.state.game) return;
+      this.state = { ...PageState.defaults, game: button.dataset.game, sort: this.state.sort, kind: this.state.kind };
+      PageState.write(this.state, true);
+      this.render();
     });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.sheet.chart?.redraw());
-
-    await this.runSearch();
-    const saved = this.preferences.read("card");
-    if (saved?.game === this.game && saved.card) this.select(this.search.find(saved.card.product) ?? saved.card);
+    // Back and forward buttons: show the state of that address.
+    addEventListener("popstate", () => {
+      this.state = PageState.read();
+      this.render();
+    });
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.sheet.chart.redraw());
+    await this.render();
   }
 
-  runSearch() {
-    const text = this.query.value.trim();
-    this.preferences.write("query", text);
-    return this.search.search(this.game, text);
+  async render() {
+    for (const button of this.gameButtons.children) button.setAttribute("aria-pressed", String(button.dataset.game === this.state.game));
+    this.filters.show(this.state);
+    const expansions = this.filters.loadExpansions(this.state.game, this.state.expansion);
+    this.results.search(this.searchParams());
+    await expansions;
+    if (this.state.card) {
+      if (this.sheet.card?.product !== this.state.card) await this.openFromAddress(this.state.game, this.state.card);
+    } else {
+      this.sheet.close();
+    }
   }
 
-  select(card) {
-    this.preferences.write("card", { game: this.game, card });
-    this.search.select(card.product);
-    this.sheet.show(this.game, card);
+  /** A card named in the address: its details come from the server. */
+  async openFromAddress(game, product) {
+    const card = await this.api.card(game, product).catch(() => null);
+    if (this.state.card === product) this.sheet.open(game, card ?? { product, name: `#${product}` });
   }
 
-  showGame() {
-    for (const button of this.gameButtons.children) button.setAttribute("aria-pressed", String(button.dataset.game === this.game));
+  filtersChanged() {
+    this.state = { ...this.state, ...this.filters.values() };
+    PageState.write(this.state);
+    this.results.search(this.searchParams());
+  }
+
+  openCard(card) {
+    this.state = { ...this.state, card: card.product };
+    PageState.write(this.state, true);
+    this.sheet.open(this.state.game, card);
+  }
+
+  sheetClosed() {
+    if (!this.state.card) return;
+    this.state = { ...this.state, card: "" };
+    PageState.write(this.state, true);
+  }
+
+  searchParams() {
+    const { game, q, expansion, kind, min, max, sort } = this.state;
+    return { game, q, expansion, kind, min, max, sort };
   }
 }
 

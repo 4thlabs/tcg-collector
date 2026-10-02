@@ -15,46 +15,76 @@
         <h1>Card prices</h1>
         <p class="sub">Cardmarket prices archived every day by tcg-collector.</p>
       </div>
-      <div class="controls">
-        <div class="seg" role="group" aria-label="Game" id="game">
-          <button type="button" data-game="1" aria-pressed="true">Magic</button>
-          <button type="button" data-game="21" aria-pressed="false">Star Wars Unlimited</button>
-        </div>
-        <input type="search" id="query" placeholder="Card name, e.g. Sol Ring" autocomplete="off" aria-label="Search a card">
+      <div class="seg" role="group" aria-label="Game" id="game">
+        <button type="button" data-game="1" aria-pressed="true">Magic</button>
+        <button type="button" data-game="21" aria-pressed="false">Star Wars Unlimited</button>
       </div>
     </header>
 
-    <div class="grid">
-      <aside class="panel" aria-label="Results">
-        <div class="rail-head"><span>Cards</span><span id="count"></span></div>
-        <ul class="results" id="results" role="listbox" aria-label="Cards found"></ul>
-        <p class="note" id="rail-note">Type at least 3 letters of a card name.</p>
-      </aside>
+    <form class="filters" id="filters" role="search">
+      <label class="field grow">
+        <span>Name</span>
+        <input type="search" name="q" placeholder="e.g. sol ring, jace mind" autocomplete="off">
+      </label>
+      <label class="field grow">
+        <span>Expansion</span>
+        <select name="expansion"><option value="">All expansions</option></select>
+      </label>
+      <label class="field">
+        <span>Type</span>
+        <select name="kind">
+          <option value="all">All products</option>
+          <option value="single">Single cards</option>
+          <option value="sealed">Sealed products</option>
+        </select>
+      </label>
+      <label class="field price">
+        <span>Trend from (€)</span>
+        <input type="number" name="min" min="0" step="0.01" inputmode="decimal">
+      </label>
+      <label class="field price">
+        <span>to (€)</span>
+        <input type="number" name="max" min="0" step="0.01" inputmode="decimal">
+      </label>
+      <label class="field">
+        <span>Sort</span>
+        <select name="sort">
+          <option value="relevance">Best match</option>
+          <option value="trend-desc">Trend, highest first</option>
+          <option value="trend-asc">Trend, lowest first</option>
+          <option value="newest">Newest first</option>
+        </select>
+      </label>
+    </form>
 
-      <main class="panel" id="sheet" aria-live="polite">
-        <div class="empty-sheet">
-          <strong>No card selected</strong>
-          <span>Search a card, then pick the printing in the list: the sheet shows its latest prices and daily prices.</span>
-        </div>
-      </main>
-    </div>
+    <p class="summary" id="summary" aria-live="polite"></p>
+    <ul class="cards" id="cards"></ul>
+    <button type="button" class="more" id="more" hidden>Show more</button>
   </div>
 
-  <template id="result-template">
-    <li class="result" role="option" tabindex="0">
-      <span class="name"></span>
-      <span class="id"></span>
-      <span class="expansion"></span>
-      <span class="added"></span>
+  <template id="card-template">
+    <li>
+      <button type="button" class="card">
+        <span class="thumb"></span>
+        <span class="info">
+          <span class="name"></span>
+          <span class="expansion"></span>
+          <span class="prices">
+            <span class="trend"></span>
+            <span class="low"></span>
+          </span>
+        </span>
+      </button>
     </li>
   </template>
 
-  <template id="sheet-template">
+  <dialog id="sheet" aria-labelledby="sheet-name">
     <div class="sheet">
+      <button type="button" class="close" aria-label="Close">×</button>
       <figure class="art" hidden><img alt=""></figure>
       <div class="facts">
         <div>
-          <h2 class="card-name"></h2>
+          <h2 id="sheet-name" class="card-name"></h2>
           <div class="meta">
             <span class="card-game"></span>
             <span>idProduct <code class="card-id"></code></span>
@@ -63,7 +93,7 @@
             <a class="card-link" target="_blank" rel="noopener noreferrer">Open on Cardmarket</a>
           </div>
         </div>
-        <div class="prices"><p class="note">Loading prices…</p></div>
+        <div class="tiles"></div>
         <div class="asof"></div>
       </div>
       <div class="chart-area">
@@ -80,6 +110,6 @@
         <div class="chart-note"></div>
       </div>
     </div>
-  </template>
+  </dialog>
 </body>
 </html>
