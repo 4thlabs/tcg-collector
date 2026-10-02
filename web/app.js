@@ -377,13 +377,16 @@ class CardSheet {
     this.dialog.querySelector(".card-link").href = Format.cardmarketUrl(game, card);
     this.dialog.querySelector(".tiles").replaceChildren(CardSheet.note("Loading prices…"));
 
+    // A new image each time, so the previous card's art never shows while this one loads: the placeholder background does.
     const art = this.dialog.querySelector(".art");
-    const image = art.querySelector("img");
     const imageUrl = this.api.imageUrl(game, card.product, "normal");
-    art.hidden = !imageUrl;
-    image.onerror = () => (art.hidden = true);
+    const image = new Image();
     image.alt = card.name;
-    image.src = imageUrl ?? "";
+    image.addEventListener("load", () => image.classList.add("loaded"));
+    image.addEventListener("error", () => (art.hidden = true));
+    art.hidden = !imageUrl;
+    art.replaceChildren(image);
+    if (imageUrl) image.src = imageUrl;
     this.showRange();
   }
 
