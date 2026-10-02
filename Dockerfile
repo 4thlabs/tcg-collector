@@ -17,6 +17,9 @@ COPY web ./web
 # No dedicated user: a folder mounted from the host is often owned by root.
 VOLUME ["/app/data"]
 
+# Port of the card page (command serve); the default schedule command opens none.
+EXPOSE 8080
+
 # Node runs TypeScript directly (type stripping, Node >= 22.18).
 # --run-now: one collection on start; no risk of duplicates thanks to the fingerprint ledger.
 CMD ["node", "src/cli.ts", "schedule", "--run-now"]
