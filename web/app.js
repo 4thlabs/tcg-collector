@@ -29,6 +29,11 @@ class Api {
     return (await this.get("api/expansions", { game })).expansions;
   }
 
+  /** Day of the game's latest archived price guide (YYYY-MM-DD), or null. */
+  async latestDay(game) {
+    return (await this.get("api/latest", { game })).day;
+  }
+
   async latestPrices(game, product) {
     return (await this.get("api/prices", { game, product })).prices;
   }
@@ -93,6 +98,28 @@ class Format {
     badge.className = "version";
     badge.textContent = Format.version(card);
     element.append(badge);
+  }
+}
+
+/** Header line telling how recent the game's prices are. */
+class LatestDay {
+  constructor(api) {
+    this.api = api;
+    this.element = document.getElementById("latest");
+    this.game = null;
+  }
+
+  async show(game) {
+    if (this.game === game) return;
+    this.game = game;
+    this.element.textContent = "";
+    try {
+      const day = await this.api.latestDay(game);
+      if (this.game !== game) return;
+      this.element.textContent = day ? `Latest prices: ${day}.` : "No prices imported yet.";
+    } catch {
+      // The page works without it.
+    }
   }
 }
 
@@ -457,6 +484,7 @@ class CardPage {
     this.api = new Api();
     this.state = PageState.read();
     this.gameButtons = document.getElementById("game");
+    this.latestDay = new LatestDay(this.api);
     this.filters = new Filters(this.api, () => this.filtersChanged());
     this.results = new ResultList(this.api, (card) => this.openCard(card));
     this.sheet = new CardSheet(this.api, () => this.sheetClosed());
@@ -482,6 +510,7 @@ class CardPage {
   async render() {
     for (const button of this.gameButtons.children) button.setAttribute("aria-pressed", String(button.dataset.game === this.state.game));
     this.filters.show(this.state);
+    this.latestDay.show(this.state.game);
     const expansions = this.filters.loadExpansions(this.state.game, this.state.expansion);
     this.results.search(this.searchParams());
     await expansions;

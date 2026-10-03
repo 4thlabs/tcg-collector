@@ -48,11 +48,11 @@ export class InfluxImporter {
 
         const points = kind === FeedKind.priceGuide ? this.pricePoints(file, days) : this.productPoints(file, days, lastDay);
         for await (const [day, dayPoints] of points) {
-          summary.points += await this.writer.write(dayPoints);
-          summary.files++;
-          // Recorded after each day: an interrupted import resumes where it stopped.
+          // The log entry goes last, with the day's points: an interrupted import resumes where it stopped.
+          await this.writer.write([...dayPoints, this.ledger.entry(file.key, file.idGame, day, dayPoints.length)]);
           this.ledger.record(file.key, day);
-          await this.ledger.save();
+          summary.points += dayPoints.length;
+          summary.files++;
           this.logger.info(`imported ${file.key} ${day} (${dayPoints.length} points)`);
         }
       }

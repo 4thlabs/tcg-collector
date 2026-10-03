@@ -64,6 +64,13 @@ export class CardCatalog {
     }));
   }
 
+  /** Day of the latest archived price guide of a game (YYYY-MM-DD), or null when none was imported. */
+  async latestDay(game: string): Promise<string | null> {
+    const rows = await this.reader.query(`SELECT max(time) AS day FROM price WHERE game = $game`, { game });
+    const day = rows[0]?.day;
+    return day == null ? null : new Date(Number(day)).toISOString().slice(0, 10);
+  }
+
   /** Latest archived prices of a product, or null when it has none. */
   async latestPrices(game: string, product: string): Promise<Prices | null> {
     const columns = priceFields.map((field) => `nullif(${field}, 0) AS ${field}`).join(", ");
