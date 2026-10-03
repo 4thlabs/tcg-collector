@@ -81,7 +81,7 @@ export class WebServer {
     }
   }
 
-  /** JSON routes: search, card, expansions, prices, daily. */
+  /** JSON routes: search, card, expansions, latest, prices, daily. */
   private async api(url: URL): Promise<unknown> {
     const query = url.searchParams;
     const game = WebServer.id(query, "game");
@@ -92,6 +92,8 @@ export class WebServer {
         return { card: (await this.parts.indexes.get(game)).card(WebServer.id(query, "product")) };
       case "/api/expansions":
         return { expansions: (await this.parts.indexes.get(game)).expansions };
+      case "/api/latest":
+        return { day: await this.parts.catalog.latestDay(game) };
       case "/api/prices":
         return { prices: await this.parts.catalog.latestPrices(game, WebServer.id(query, "product")) };
       case "/api/daily": {

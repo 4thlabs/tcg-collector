@@ -31,6 +31,10 @@ class FakeCatalog extends CardCatalog {
     return [{ product: "910771", trend: 1.24, low: 1.2, trendFoil: null }];
   }
 
+  override async latestDay(): Promise<string | null> {
+    return "2026-10-03";
+  }
+
   override async latestPrices(game: string, product: string): Promise<Prices | null> {
     this.calls.push(`prices ${game} ${product}`);
     return null;
@@ -97,4 +101,9 @@ test("answers 404 for a game without images", async () => {
 
 test("hides database errors behind a 500", async () => {
   assert.deepEqual(await get("/api/daily?game=1&product=910771&days=30"), { status: 500, body: { error: "The server could not answer" } });
+});
+
+test("tells the day of the latest price guide", async () => {
+  assert.deepEqual(await get("/api/latest?game=1"), { status: 200, body: { day: "2026-10-03" } });
+  assert.equal((await get("/api/latest?game=x")).status, 400);
 });
