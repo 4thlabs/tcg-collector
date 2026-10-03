@@ -50,11 +50,13 @@ export class App {
   /** Runs an import with a connected client, then closes it. */
   async withImporter<T>(task: (importer: InfluxImporter) => Promise<T>): Promise<T> {
     const writer = new InfluxWriter(this.influxSettings());
+    const reader = new InfluxReader(this.influxSettings());
     try {
-      const ledger = await ImportLedger.open(join(this.options.dataDir, "import-ledger.json"));
+      // The ledger lives in the database: a wiped database is rebuilt from the archives by the next import.
+      const ledger = await ImportLedger.load(reader);
       return await task(new InfluxImporter(this.archive(), ledger, writer, this.logger));
     } finally {
-      await writer.close();
+      await Promise.all([writer.close(), reader.close()]);
     }
   }
 

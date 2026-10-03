@@ -23,7 +23,6 @@ Catalogues are therefore archived only when they really change. Estimated storag
 ```
 data/
   ledger.json                             last version seen for each file (ETag, fingerprint, dates)
-  import-ledger.json                      last day imported into InfluxDB, per file
   archive/<type>/<game>/<YYYY-MM-DD>.json.gz
 ```
 
@@ -52,16 +51,17 @@ The default time, 12:00 UTC, comes from the publication times observed on 2026-0
 
 ## InfluxDB
 
-`import` writes the archived catalogues and price guides into InfluxDB 3 Core through the official client ([`@influxdata/influxdb3-client`](https://github.com/InfluxCommunity/influxdb3-js)). The database is created by the first write. It only imports the days after the last one recorded in `data/import-ledger.json`, so it can run after every collection; the first run imports the whole archive. `--replay` imports everything again, e.g. into a new database: it creates no duplicates, since InfluxDB keeps one row per series (tag set) and time.
+`import` writes the archived catalogues and price guides into InfluxDB 3 Core through the official client ([`@influxdata/influxdb3-client`](https://github.com/InfluxCommunity/influxdb3-js)). The database is created by the first write. It only imports the days after the last one recorded in the database's `import_log` table, so it can run after every collection; the first run imports the whole archive. The database holds no state the archives cannot rebuild: if it is lost or wiped, the next `import` finds no log and imports everything again. `--replay` imports everything again, e.g. into a new database: it creates no duplicates, since InfluxDB keeps one row per series (tag set) and time.
 
 With `INFLUX_URL` set, `schedule` imports after each collection, for the games in `IMPORT_GAMES` (default: the collected games).
 
-Two tables, both tagged with `game` (Cardmarket game id) and `product` (idProduct):
+Two data tables, both tagged with `game` (Cardmarket game id) and `product` (idProduct), and the import log:
 
 | table | one point per | time | fields |
 |---|---|---|---|
 | `price` | product and archived price guide | the archive day, 00:00 UTC (the price guide is published around 01:00 UTC that day) | `low`, `trend`, `avg`, `avg1`, `avg7`, `avg30` and the same with `_foil`, in euros; a value Cardmarket leaves empty is not written |
 | `product` | new or changed product in an archived catalogue (singles and non-singles) | the catalogue archive day, 00:00 UTC | `name`, `category` (e.g. "Magic Single"), `date_added`, `id_category`, `id_expansion`, `id_metacard` |
+| `import_log` (tags `game`, `file`) | imported archive file (e.g. `price_guide_21`) and day | the archive day, 00:00 UTC | `points`, the number of points written for that day |
 
 The first import of a catalogue writes every product; later ones only write the products that were added or changed, so the latest point of a product is its current description. A price guide is only archived when its content changes, so a missing day means the prices did not move: fill gaps with the previous value, as in the example below.
 
@@ -116,7 +116,7 @@ The container collects (and imports) on start, then every day at `COLLECT_AT` (U
 - The page state (game, search, filters, open card) is in the address, so a search or a card can be bookmarked.
 - No login: serve it on your own network only.
 
-The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers JSON routes `/api/search?game&q&expansion&kind&min&max&sort&offset&limit`, `/api/card?game&product`, `/api/expansions?game`, `/api/prices?game&product` and `/api/daily?game&product&days`, plus the images at `/api/image?game&product&size`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
+The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers JSON routes `/api/search?game&q&expansion&kind&min&max&sort&offset&limit`, `/api/card?game&product`, `/api/expansions?game`, `/api/latest?game` (day of the latest price guide), `/api/prices?game&product` and `/api/daily?game&product&days`, plus the images at `/api/image?game&product&size`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
 
 ## Grafana
 
@@ -147,7 +147,7 @@ src/collect/daily-scheduler.ts       daily run at a fixed time
 src/import/influx-importer.ts        import of the new catalogues and price guides, day by day
 src/import/price-point-factory.ts    price guide line -> InfluxDB point
 src/import/product-point-factory.ts  catalogue line -> InfluxDB point, change detection
-src/import/import-ledger.ts          last imported day per file
+src/import/import-ledger.ts          last imported day per file, in the import_log table
 src/influx/influx-writer.ts          batched writes through the official InfluxDB 3 client
 src/influx/influx-reader.ts          SQL queries with parameters, through the same client
 src/web/web-server.ts                HTTP server of the card page: static files and JSON API
