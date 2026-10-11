@@ -28,9 +28,12 @@ export class ExpansionLabel {
   /** Leading words common to every name (at least two names), without a trailing separator. */
   private static sharedWords(names: readonly string[]): string {
     if (names.length < 2) return "";
-    const words = names.map((name) => name.split(" "));
+    const [first, ...others] = names.map((name) => name.split(" "));
     const shared: string[] = [];
-    for (let i = 0; words.every((w) => w[i] !== undefined && w[i] === words[0][i]); i++) shared.push(words[0][i]);
+    for (const [index, word] of first.entries()) {
+      if (others.some((words) => words[index] !== word)) break;
+      shared.push(word);
+    }
     return ExpansionLabel.clean(shared.join(" ").replace(/[:\-–]$/, ""));
   }
 

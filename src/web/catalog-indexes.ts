@@ -24,23 +24,30 @@ export class CatalogIndexes {
     this.now = now;
   }
 
-  /** Index of a game. An old index keeps answering while the new one builds; a failed first build is retried on the next call. */
+  /** Index of a game: built on the first call, then rebuilt in the background once it is old. */
   get(game: string): Promise<CatalogIndex> {
     const entry = this.entries.get(game);
-    if (!entry) {
-      const index = this.build(game);
-      this.entries.set(game, { index, since: this.now() });
-      index.catch(() => this.entries.delete(game));
-      return index;
-    }
-    if (this.now() - entry.since > CatalogIndexes.maxAgeMs) {
-      entry.since = this.now();
-      this.build(game).then(
-        (index) => this.entries.set(game, { index: Promise.resolve(index), since: this.now() }),
-        () => undefined, // already logged; the old index stays until the next attempt
-      );
-    }
+    if (!entry) return this.buildFirst(game);
+    if (this.now() - entry.since > CatalogIndexes.maxAgeMs) this.rebuildInBackground(game, entry);
     return entry.index;
+  }
+
+  /** A failed first build is forgotten, so the next call tries again. */
+  private buildFirst(game: string): Promise<CatalogIndex> {
+    const index = this.build(game);
+    this.entries.set(game, { index, since: this.now() });
+    index.catch(() => this.entries.delete(game));
+    return index;
+  }
+
+  /** The old index keeps answering until the new one is ready, and stays until the next attempt if the rebuild fails. */
+  private rebuildInBackground(game: string, entry: Entry): void {
+    // Moving "since" now keeps the calls made during the rebuild from starting another one.
+    entry.since = this.now();
+    this.build(game).then(
+      (index) => this.entries.set(game, { index: Promise.resolve(index), since: this.now() }),
+      () => undefined, // already logged by build()
+    );
   }
 
   private async build(game: string): Promise<CatalogIndex> {

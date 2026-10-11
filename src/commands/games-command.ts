@@ -2,6 +2,7 @@
 // The table is the command's output, not a log, so it goes straight to stdout.
 import { Command } from "commander";
 import type { App } from "../app.ts";
+import type { CardmarketClient } from "../cardmarket/cardmarket-client.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
 import { GameSelection } from "../collect/game-selection.ts";
 
@@ -19,15 +20,27 @@ export class GamesCommand {
       .option("-g, --games <ids>", 'games to probe: "all" or a list such as "1,6,21"', "all")
       .action(async (options: { games: string }) => {
         const client = this.app().client;
+        console.log(["game", ...FeedKind.all.map((kind) => kind.name)].join("\t"));
         let total = 0;
-        console.log(["game", ...FeedKind.all.map((k) => k.name)].join("\t"));
         for (const idGame of GameSelection.parse(options.games).ids) {
-          const sizes = await Promise.all(FeedKind.all.map(async (kind) => (await client.probe(new FeedFile(kind, idGame)))?.size));
+          const sizes = await GamesCommand.fileSizes(client, idGame);
+          // A game id without any file is not a published game.
           if (sizes.every((size) => size === undefined)) continue;
-          total += sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
-          console.log([idGame, ...sizes.map((size) => (size === undefined ? "-" : `${(size / 1e6).toFixed(1)} MB`))].join("\t"));
+          for (const size of sizes) total += size ?? 0;
+          console.log([idGame, ...sizes.map(GamesCommand.megabytes)].join("\t"));
         }
-        console.log(`Uncompressed total: ${(total / 1e6).toFixed(1)} MB`);
+        console.log(`Uncompressed total: ${GamesCommand.megabytes(total)}`);
       });
+  }
+
+  /** Size in bytes of each file of a game, in the order of FeedKind.all; undefined for a file that does not exist. */
+  private static async fileSizes(client: CardmarketClient, idGame: number): Promise<(number | undefined)[]> {
+    const versions = await Promise.all(FeedKind.all.map((kind) => client.probe(new FeedFile(kind, idGame))));
+    return versions.map((version) => version?.size);
+  }
+
+  /** "26.1 MB", or "-" for a missing file. */
+  private static megabytes(bytes: number | undefined): string {
+    return bytes === undefined ? "-" : `${(bytes / 1e6).toFixed(1)} MB`;
   }
 }

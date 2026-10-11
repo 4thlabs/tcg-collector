@@ -1,4 +1,5 @@
 // Reads the products and prices the web page needs from the InfluxDB tables written by the import.
+import { InfluxDay } from "../influx/influx-day.ts";
 import type { InfluxReader, Row } from "../influx/influx-reader.ts";
 
 /** Latest description of a product in Cardmarket's catalogue. */
@@ -68,7 +69,7 @@ export class CardCatalog {
   async latestDay(game: string): Promise<string | null> {
     const rows = await this.reader.query(`SELECT max(time) AS day FROM price WHERE game = $game`, { game });
     const day = rows[0]?.day;
-    return day == null ? null : new Date(Number(day)).toISOString().slice(0, 10);
+    return day == null ? null : InfluxDay.of(day);
   }
 
   /** Latest archived prices of a product, or null when it has none. */
@@ -100,7 +101,7 @@ export class CardCatalog {
   }
 
   private static toPrices(row: Row, time: unknown): Prices {
-    const prices = { day: new Date(Number(time)).toISOString().slice(0, 10) } as Prices;
+    const prices = { day: InfluxDay.of(time) } as Prices;
     for (const field of priceFields) prices[field] = CardCatalog.numberOrNull(row[field]);
     return prices;
   }

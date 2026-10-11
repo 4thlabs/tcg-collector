@@ -150,6 +150,7 @@ src/import/product-point-factory.ts  catalogue line -> InfluxDB point, change de
 src/import/import-ledger.ts          last imported day per file, in the import_log table
 src/influx/influx-writer.ts          batched writes through the official InfluxDB 3 client
 src/influx/influx-reader.ts          SQL queries with parameters, through the same client
+src/influx/influx-day.ts             archive day <-> InfluxDB timestamp (00:00 UTC)
 src/web/web-server.ts                HTTP server of the card page, on Hono: static files and JSON routes
 src/web/api-query.ts                 checks the API query parameters (400 on a bad value)
 src/web/card-catalog.ts              InfluxDB queries: products, latest trends, latest and daily prices

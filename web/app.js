@@ -90,6 +90,22 @@ class Format {
     return `https://www.cardmarket.com/en/${GAMES[game].cardmarket}/Products?idProduct=${encodeURIComponent(card.product)}`;
   }
 
+  /** "low €1.20 · foil €3.40", leaving out the prices the card does not have. */
+  static otherPrices(card) {
+    const parts = [];
+    if (card.low != null) parts.push(`low ${Format.price(card.low)}`);
+    if (card.trendFoil != null) parts.push(`foil ${Format.price(card.trendFoil)}`);
+    return parts.join(" · ");
+  }
+
+  /** A short message paragraph, styled as an error when isError. */
+  static note(text, isError = false) {
+    const p = document.createElement("p");
+    p.className = isError ? "note err" : "note";
+    p.textContent = text;
+    return p;
+  }
+
   /** Name with its version badge. */
   static nameInto(element, card) {
     element.textContent = card.name;
@@ -212,7 +228,7 @@ class ResultList {
       this.shown += result.cards.length;
       this.total = result.total;
       this.summary.classList.remove("err");
-      this.summary.textContent = this.total === 0 ? "No product matches these filters." : `${this.total.toLocaleString("en")} products${this.total > this.shown ? `, ${this.shown} shown` : ""}`;
+      this.summary.textContent = this.summaryText();
       this.more.hidden = this.shown >= this.total;
     } catch (error) {
       if (sequence !== this.sequence) return;
@@ -223,27 +239,33 @@ class ResultList {
     }
   }
 
+  /** "1,234 products, 60 shown", or a message when nothing matches. */
+  summaryText() {
+    if (this.total === 0) return "No product matches these filters.";
+    const count = `${this.total.toLocaleString("en")} products`;
+    return this.total > this.shown ? `${count}, ${this.shown} shown` : count;
+  }
+
   item(card) {
     const item = this.template.content.firstElementChild.cloneNode(true);
-    const game = this.params.game;
-    const thumb = item.querySelector(".thumb");
-    const imageUrl = this.api.imageUrl(game, card.product, "small");
-    // The first letter shows until the image loads, and stays when there is none.
-    thumb.textContent = card.name.slice(0, 1);
-    if (imageUrl) {
-      const image = new Image();
-      image.loading = "lazy";
-      image.alt = "";
-      image.addEventListener("error", () => image.remove());
-      image.src = imageUrl;
-      thumb.append(image);
-    }
+    this.fillThumb(item.querySelector(".thumb"), card);
     Format.nameInto(item.querySelector(".name"), card);
     item.querySelector(".expansion").textContent = Format.expansion(card);
     item.querySelector(".trend").textContent = card.trend == null ? "no trend" : Format.price(card.trend);
-    item.querySelector(".low").textContent = [card.low != null && `low ${Format.price(card.low)}`, card.trendFoil != null && `foil ${Format.price(card.trendFoil)}`].filter(Boolean).join(" · ");
+    item.querySelector(".low").textContent = Format.otherPrices(card);
     item.querySelector(".card").addEventListener("click", () => this.onOpen(card));
     return item;
+  }
+
+  /** The first letter shows until the image loads, and stays when there is none. */
+  fillThumb(thumb, card) {
+    thumb.textContent = card.name.slice(0, 1);
+    const image = new Image();
+    image.loading = "lazy";
+    image.alt = "";
+    image.addEventListener("error", () => image.remove());
+    image.src = this.api.imageUrl(this.params.game, card.product, "small");
+    thumb.append(image);
   }
 }
 
@@ -339,10 +361,7 @@ class PriceChart {
   }
 
   message(text, isError = false) {
-    const p = document.createElement("p");
-    p.className = isError ? "note err" : "note";
-    p.textContent = text;
-    this.note.replaceChildren(p);
+    this.note.replaceChildren(Format.note(text, isError));
   }
 }
 
@@ -412,19 +431,21 @@ class CardSheet {
     text(".card-added", card.added ? `added ${card.added}` : "");
     text(".asof", "");
     this.dialog.querySelector(".card-link").href = Format.cardmarketUrl(game, card);
-    this.dialog.querySelector(".tiles").replaceChildren(CardSheet.note("Loading prices…"));
+    this.dialog.querySelector(".tiles").replaceChildren(Format.note("Loading prices…"));
+    this.showArt();
+    this.showRange();
+  }
 
-    // A new image each time, so the previous card's art never shows while this one loads: the placeholder background does.
+  /** A new image each time, so the previous card's art never shows while this one loads: the placeholder background does. */
+  showArt() {
     const art = this.dialog.querySelector(".art");
-    const imageUrl = this.api.imageUrl(game, card.product, "normal");
     const image = new Image();
-    image.alt = card.name;
+    image.alt = this.card.name;
     image.addEventListener("load", () => image.classList.add("loaded"));
     image.addEventListener("error", () => (art.hidden = true));
-    art.hidden = !imageUrl;
+    art.hidden = false;
     art.replaceChildren(image);
-    if (imageUrl) image.src = imageUrl;
-    this.showRange();
+    image.src = this.api.imageUrl(this.game, this.card.product, "normal");
   }
 
   showRange() {
@@ -437,11 +458,13 @@ class CardSheet {
     try {
       const prices = await this.api.latestPrices(this.game, card.product);
       if (card !== this.card) return;
-      if (!prices) return tiles.replaceChildren(CardSheet.note("No archived price for this product."));
-      tiles.replaceChildren(...CardSheet.fields.filter(({ field, foil }) => !foil || prices[field] != null).map((entry) => CardSheet.tile(entry, prices)));
+      if (!prices) return tiles.replaceChildren(Format.note("No archived price for this product."));
+      // Foil tiles only show for a card that has a foil price.
+      const shown = CardSheet.fields.filter(({ field, foil }) => !foil || prices[field] != null);
+      tiles.replaceChildren(...shown.map((entry) => CardSheet.tile(entry, prices)));
       this.dialog.querySelector(".asof").textContent = `Latest archived price guide: ${prices.day}`;
     } catch (error) {
-      if (card === this.card) tiles.replaceChildren(CardSheet.note(`Prices failed: ${error.message}.`, true));
+      if (card === this.card) tiles.replaceChildren(Format.note(`Prices failed: ${error.message}.`, true));
     }
   }
 
@@ -468,13 +491,6 @@ class CardSheet {
     value.textContent = Format.price(prices[field]);
     tile.append(name, value);
     return tile;
-  }
-
-  static note(text, isError = false) {
-    const p = document.createElement("p");
-    p.className = isError ? "note err" : "note";
-    p.textContent = text;
-    return p;
   }
 }
 

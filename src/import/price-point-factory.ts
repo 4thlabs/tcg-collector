@@ -1,6 +1,7 @@
 // Turns one line of the price guide into an InfluxDB point.
 import { Point } from "@influxdata/influxdb3-client";
 import type { PriceGuideEntry } from "../cardmarket/feed-content.ts";
+import { InfluxDay } from "../influx/influx-day.ts";
 
 /**
  * Table "price", one point per product and per day (timestamp: the archive day at 00:00 UTC).
@@ -31,7 +32,7 @@ export class PricePointFactory {
     const point = Point.measurement(PricePointFactory.table)
       .setTag("game", String(idGame))
       .setTag("product", String(entry.idProduct))
-      .setTimestamp(new Date(`${day}T00:00:00Z`));
+      .setTimestamp(InfluxDay.start(day));
 
     let empty = true;
     for (const [key, field] of PricePointFactory.fields) {

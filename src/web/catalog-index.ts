@@ -53,22 +53,8 @@ export class CatalogIndex {
 
   constructor(products: readonly ProductRecord[], trends: readonly TrendRecord[]) {
     const labels = CatalogIndex.expansionLabels(products);
-    const prices = new Map(trends.map((trend) => [trend.product, trend]));
-    const cards = products.map((record): CardEntry => {
-      const price = prices.get(record.product);
-      return {
-        product: record.product,
-        name: record.name,
-        single: CatalogIndex.isSingle(record.category),
-        expansionId: record.expansionId,
-        expansion: record.expansionId === null ? null : (labels.get(record.expansionId) ?? null),
-        version: null,
-        added: record.added,
-        trend: price?.trend ?? null,
-        low: price?.low ?? null,
-        trendFoil: price?.trendFoil ?? null,
-      };
-    });
+    const trendsByProduct = new Map(trends.map((trend) => [trend.product, trend]));
+    const cards = products.map((record) => CatalogIndex.toCard(record, labels, trendsByProduct.get(record.product)));
     CatalogIndex.numberVersions(cards);
     this.cards = new Map(cards.map((card) => [card.product, card]));
     this.expansions = CatalogIndex.expansionOptions(cards);
@@ -94,14 +80,10 @@ export class CatalogIndex {
   find(request: SearchRequest): SearchResult {
     const text = request.text.trim();
     const filter = (card: CardEntry) => CatalogIndex.passes(card, request);
-    let matches: CardEntry[];
-    if (text) {
-      matches = this.matches(text, filter);
-    } else {
-      matches = [...this.cards.values()].filter(filter);
-      if (request.sort === "relevance") request = { ...request, sort: "newest" };
-    }
-    CatalogIndex.sort(matches, request.sort);
+    const matches = text ? this.matches(text, filter) : [...this.cards.values()].filter(filter);
+    // Without text there is no relevance: the newest products come first.
+    const sort = !text && request.sort === "relevance" ? "newest" : request.sort;
+    CatalogIndex.sort(matches, sort);
     return { total: matches.length, cards: matches.slice(request.offset, request.offset + request.limit) };
   }
 
@@ -112,20 +94,38 @@ export class CatalogIndex {
   private matches(text: string, filter: (card: CardEntry) => boolean): CardEntry[] {
     let hits = this.search.search(text);
     if (hits.length === 0) hits = this.search.search(text, { fuzzy: 0.2 });
-    return hits
-      .map((hit) => ({ card: this.cards.get(String(hit.id)), score: hit.score }))
-      .filter((hit): hit is { card: CardEntry; score: number } => hit.card !== undefined && filter(hit.card))
-      .sort((a, b) => b.score - a.score || CatalogIndex.newestFirst(a.card, b.card))
-      .map((hit) => hit.card);
+    const found: { card: CardEntry; score: number }[] = [];
+    for (const hit of hits) {
+      const card = this.cards.get(String(hit.id));
+      if (card && filter(card)) found.push({ card, score: hit.score });
+    }
+    found.sort((a, b) => b.score - a.score || CatalogIndex.newestFirst(a.card, b.card));
+    return found.map((hit) => hit.card);
+  }
+
+  /** A product as the list shows it; its version is numbered later, once all the cards are known. */
+  private static toCard(record: ProductRecord, labels: Map<number, string>, trend: TrendRecord | undefined): CardEntry {
+    return {
+      product: record.product,
+      name: record.name,
+      single: CatalogIndex.isSingle(record.category),
+      expansionId: record.expansionId,
+      expansion: record.expansionId === null ? null : (labels.get(record.expansionId) ?? null),
+      version: null,
+      added: record.added,
+      trend: trend?.trend ?? null,
+      low: trend?.low ?? null,
+      trendFoil: trend?.trendFoil ?? null,
+    };
   }
 
   /** Same name in the same expansion: numbers the versions by idProduct, the order Cardmarket uses for V.1, V.2… */
-  static numberVersions(cards: CardEntry[]): void {
+  private static numberVersions(cards: CardEntry[]): void {
     const groups = Map.groupBy(cards, (card) => `${card.expansionId}/${card.name}`);
     for (const group of groups.values()) {
       if (group.length < 2) continue;
       group.sort((a, b) => Number(a.product) - Number(b.product));
-      group.forEach((card, index) => (card.version = index + 1));
+      for (const [index, card] of group.entries()) card.version = index + 1;
     }
   }
 
@@ -143,13 +143,19 @@ export class CatalogIndex {
     return true;
   }
 
-  /** Relevance keeps MiniSearch's order; cards without a trend price go last when sorting by price. */
+  /** Relevance keeps MiniSearch's order. */
   private static sort(cards: CardEntry[], order: SortOrder): void {
-    const byTrend = (direction: number) => (a: CardEntry, b: CardEntry) =>
-      a.trend === null ? (b.trend === null ? 0 : 1) : b.trend === null ? -1 : direction * (a.trend - b.trend);
-    if (order === "trend-desc") cards.sort(byTrend(-1));
-    else if (order === "trend-asc") cards.sort(byTrend(1));
+    if (order === "trend-desc") cards.sort((a, b) => CatalogIndex.byTrend(a, b, -1));
+    else if (order === "trend-asc") cards.sort((a, b) => CatalogIndex.byTrend(a, b, 1));
     else if (order === "newest") cards.sort(CatalogIndex.newestFirst);
+  }
+
+  /** Compares trend prices, ascending (direction 1) or descending (-1); cards without a trend go last either way. */
+  private static byTrend(a: CardEntry, b: CardEntry, direction: 1 | -1): number {
+    if (a.trend === null && b.trend === null) return 0;
+    if (a.trend === null) return 1;
+    if (b.trend === null) return -1;
+    return direction * (a.trend - b.trend);
   }
 
   private static newestFirst(a: CardEntry, b: CardEntry): number {
@@ -180,6 +186,7 @@ export class CatalogIndex {
       if (card.added && (!option.added || card.added > option.added)) option.added = card.added;
       options.set(card.expansionId, option);
     }
-    return [...options.values()].sort((a, b) => (b.added ?? "").localeCompare(a.added ?? "") || a.label.localeCompare(b.label));
+    const newestFirst = (a: ExpansionOption, b: ExpansionOption) => (b.added ?? "").localeCompare(a.added ?? "") || a.label.localeCompare(b.label);
+    return [...options.values()].sort(newestFirst);
   }
 }

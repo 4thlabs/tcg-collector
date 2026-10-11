@@ -17,7 +17,8 @@ export class CollectCommand {
       .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
       .action(async (options: { games: string }) => {
         const app = this.app();
-        const report = await (await app.createCollector()).collect(GameSelection.parse(options.games));
+        const collector = await app.createCollector();
+        const report = await collector.collect(GameSelection.parse(options.games));
         app.logger.info(report.summary());
         if (report.failures.length > 0) process.exitCode = 1;
       });

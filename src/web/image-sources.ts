@@ -83,23 +83,29 @@ export class SwuImages implements ImageSource {
 
   private async lookUp(card: CardEntry): Promise<SwuCard | null> {
     if (!card.single) return null;
-    const expansion = card.expansionId === null ? undefined : SwuImages.expansions.get(card.expansionId);
-    // "Echo Base // Experience Token" is the base; the title starts with the part before the first comma ("No Glory, Only Results" has no subtitle).
+    // "Echo Base // Experience Token" is the base: only the first face is looked up.
     const name = card.name.split(" // ")[0];
-    const searchParams: Record<string, string> = { locale: "en", "pagination[pageSize]": "100", "filters[title][$startsWithi]": name.split(", ")[0] };
+    const expansion = card.expansionId === null ? undefined : SwuImages.expansions.get(card.expansionId);
+    const found = await this.search(name, expansion?.code);
+    const candidates = found.filter((candidate) => SwuImages.key(SwuImages.fullName(candidate)) === SwuImages.key(name));
     // Promos, prerelease and championship expansions are not in the table: any printing of the card shows its art.
-    if (expansion) searchParams["filters[expansion][code][$eq]"] = expansion.code;
-    const response = await this.http.get(SwuImages.api, { searchParams });
-    if (response.status === 404) return null;
-    const candidates = SwuImages.cards((await response.json()) as SwuAnswer).filter(
-      (candidate) => SwuImages.key(candidate.subtitle ? `${candidate.title}, ${candidate.subtitle}` : candidate.title) === SwuImages.key(name),
-    );
     if (!expansion) return candidates.find((candidate) => candidate.variants.includes("Standard")) ?? candidates[0] ?? null;
     return SwuImages.pick(candidates, expansion.hyperspace, card.trendFoil !== null);
   }
 
+  /** Cards whose title starts like the name, in one set when its code is known. */
+  private async search(name: string, setCode: string | undefined): Promise<SwuCard[]> {
+    // The title is the part before the first comma; "No Glory, Only Results" has no subtitle but still starts that way.
+    const title = name.split(", ")[0];
+    const searchParams: Record<string, string> = { locale: "en", "pagination[pageSize]": "100", "filters[title][$startsWithi]": title };
+    if (setCode) searchParams["filters[expansion][code][$eq]"] = setCode;
+    const response = await this.http.get(SwuImages.api, { searchParams });
+    if (response.status === 404) return [];
+    return SwuImages.cards((await response.json()) as SwuAnswer);
+  }
+
   /** The printing that matches a product of a set's expansion: Standard, or Hyperspace / Showcase in the Hyperspace expansion. */
-  static pick(candidates: SwuCard[], hyperspace: boolean, hasFoilPrice: boolean): SwuCard | null {
+  private static pick(candidates: SwuCard[], hyperspace: boolean, hasFoilPrice: boolean): SwuCard | null {
     const variant = (name: string) => candidates.find((card) => card.variants.includes(name));
     if (!hyperspace) return variant("Standard") ?? null;
     return (hasFoilPrice ? variant("Showcase") : undefined) ?? variant("Hyperspace") ?? null;
@@ -119,6 +125,11 @@ export class SwuImages implements ImageSource {
         },
       ];
     });
+  }
+
+  /** "Title, Subtitle", as Cardmarket names the card. */
+  private static fullName(card: SwuCard): string {
+    return card.subtitle ? `${card.title}, ${card.subtitle}` : card.title;
   }
 
   /** Names compared without case, accents or punctuation (’ and ' differ between the two sites). */

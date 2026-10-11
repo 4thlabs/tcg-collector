@@ -1,6 +1,7 @@
 // Turns one product of a catalogue into an InfluxDB point.
 import { Point } from "@influxdata/influxdb3-client";
 import type { ProductEntry } from "../cardmarket/feed-content.ts";
+import { InfluxDay } from "../influx/influx-day.ts";
 
 /**
  * Table "product": one point per product each time it appears or changes in a catalogue
@@ -20,7 +21,7 @@ export class ProductPointFactory {
       .setIntegerField("id_category", entry.idCategory)
       .setIntegerField("id_expansion", entry.idExpansion)
       .setIntegerField("id_metacard", entry.idMetacard)
-      .setTimestamp(new Date(`${day}T00:00:00Z`));
+      .setTimestamp(InfluxDay.start(day));
   }
 
   /** True when the product is new or one of its fields changed since the previous catalogue. */

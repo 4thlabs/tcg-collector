@@ -1,6 +1,7 @@
 // Last archive day imported into InfluxDB, per file (catalogues and price guides), kept in InfluxDB itself.
 // The database is the only state of the import: a new or wiped database has no log, so the next import rebuilds it from the archives.
 import { Point } from "@influxdata/influxdb3-client";
+import { InfluxDay } from "../influx/influx-day.ts";
 import type { InfluxReader } from "../influx/influx-reader.ts";
 
 /**
@@ -22,7 +23,7 @@ export class ImportLedger {
     const lastDays = new Map<string, string>();
     try {
       const rows = await reader.query(`SELECT file, max(time) AS day FROM ${ImportLedger.table} GROUP BY file`);
-      for (const row of rows) lastDays.set(String(row.file), new Date(Number(row.day)).toISOString().slice(0, 10));
+      for (const row of rows) lastDays.set(String(row.file), InfluxDay.of(row.day));
     } catch (error) {
       if (!ImportLedger.isMissing(error)) throw error;
     }
@@ -42,7 +43,7 @@ export class ImportLedger {
       .setTag("game", String(idGame))
       .setTag("file", key)
       .setIntegerField("points", points)
-      .setTimestamp(new Date(`${day}T00:00:00Z`));
+      .setTimestamp(InfluxDay.start(day));
   }
 
   /** Remembers a day whose entry was written. */

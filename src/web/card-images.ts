@@ -54,17 +54,26 @@ export class CardImages {
     }
     if (await CardImages.readIfPresent(`${base}.none`)) return null;
 
+    const image = await this.download(source, card, size);
+    if (image) await CardImages.writeAtomically(`${base}.${CardImages.extensionOf(image.type)}`, image.bytes);
+    else await CardImages.writeAtomically(`${base}.none`, Buffer.from("no image\n"));
+    return image;
+  }
+
+  /** The image from the game's source, or null when the source has none or answers with a type not kept here. */
+  private async download(source: ImageSource, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
     const url = await source.imageUrl(card, size);
-    const response = url ? await this.http.get(url, { headers: { accept: "image/*" } }) : null;
-    const type = response?.headers.get("content-type")?.split(";")[0].trim() ?? "";
-    const extension = [...CardImages.types].find(([, known]) => known === type)?.[0];
-    if (!response || response.status === 404 || !extension) {
-      await CardImages.writeAtomically(`${base}.none`, Buffer.from("no image\n"));
-      return null;
-    }
-    const bytes = Buffer.from(await response.arrayBuffer());
-    await CardImages.writeAtomically(`${base}.${extension}`, bytes);
-    return { bytes, type };
+    if (!url) return null;
+    const response = await this.http.get(url, { headers: { accept: "image/*" } });
+    const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "";
+    if (response.status === 404 || !CardImages.extensionOf(type)) return null;
+    return { bytes: Buffer.from(await response.arrayBuffer()), type };
+  }
+
+  /** File extension of an image type kept here, e.g. "jpg" for "image/jpeg"; undefined for any other type. */
+  private static extensionOf(type: string): string | undefined {
+    for (const [extension, known] of CardImages.types) if (known === type) return extension;
+    return undefined;
   }
 
   private static async readIfPresent(path: string): Promise<Buffer<ArrayBuffer> | null> {

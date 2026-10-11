@@ -25,14 +25,14 @@ export class SnapshotArchive {
 
   /** Archive path: <root>/<type>/<game>/<YYYY-MM-DD>.json.gz */
   pathOf(file: FeedFile, day: string): string {
-    return join(this.root, file.kind.name, String(file.idGame), `${day}.json.gz`);
+    return join(this.folderOf(file), `${day}.json.gz`);
   }
 
   /** Writes the compressed raw file; a new collection on the same day replaces that day's archive. */
   async store(file: FeedFile, day: string, body: Buffer): Promise<StoredSnapshot> {
     const path = this.pathOf(file, day);
     const compressed = await gzipAsync(body, { level: constants.Z_BEST_COMPRESSION });
-    await mkdir(join(this.root, file.kind.name, String(file.idGame)), { recursive: true });
+    await mkdir(this.folderOf(file), { recursive: true });
     await writeFile(`${path}.tmp`, compressed);
     await rename(`${path}.tmp`, path);
     return { path, compressedSize: compressed.length };
@@ -41,7 +41,7 @@ export class SnapshotArchive {
   /** Days (YYYY-MM-DD) archived for a file, oldest first; empty when nothing was archived yet. */
   async days(file: FeedFile): Promise<string[]> {
     try {
-      const names = await readdir(join(this.root, file.kind.name, String(file.idGame)));
+      const names = await readdir(this.folderOf(file));
       return names.filter((name) => SnapshotArchive.archiveName.test(name)).map((name) => name.slice(0, 10)).sort();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -53,5 +53,10 @@ export class SnapshotArchive {
   async read<T>(file: FeedFile, day: string): Promise<T> {
     const body = await gunzipAsync(await readFile(this.pathOf(file, day)));
     return JSON.parse(body.toString("utf8")) as T;
+  }
+
+  /** Folder of a file's archives: <root>/<type>/<game> */
+  private folderOf(file: FeedFile): string {
+    return join(this.root, file.kind.name, String(file.idGame));
   }
 }

@@ -35,7 +35,8 @@ class Cli {
 
     // Commands read the global options when they run, after the command line has been parsed.
     const app = () => new App(this.program.opts<GlobalOptions>());
-    for (const command of [new CollectCommand(app), new ScheduleCommand(app), new ImportCommand(app), new ServeCommand(app), new GamesCommand(app)]) command.register(this.program);
+    const commands = [new CollectCommand(app), new ScheduleCommand(app), new ImportCommand(app), new ServeCommand(app), new GamesCommand(app)];
+    for (const command of commands) command.register(this.program);
   }
 
   async run(argv: readonly string[]): Promise<void> {

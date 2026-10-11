@@ -38,7 +38,8 @@ export class ScheduleCommand {
         const games = GameSelection.parse(options.games);
         const importGames = options.importGames ? GameSelection.parse(options.importGames) : games;
         const collect = async () => {
-          const report = await (await app.createCollector()).collect(games);
+          const collector = await app.createCollector();
+          const report = await collector.collect(games);
           app.logger.info(report.summary());
           if (app.influxConfigured) await app.withImporter((importer) => importer.import(importGames));
         };

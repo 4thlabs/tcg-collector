@@ -28,24 +28,26 @@ export class Collector {
     this.logger.info(`Collection started for ${games.ids.length} game ids`);
     const report = new CollectReport();
     for (const idGame of games.ids) {
-      for (const kind of this.kinds) {
-        const file = new FeedFile(kind, idGame);
-        try {
-          const { outcome, bytes } = await this.collectFile(file, now);
-          report.add(file.key, outcome, bytes);
-          // Archives are the interesting events; the rest is only visible at debug level.
-          if (outcome === "archived") this.logger.info(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
-          else this.logger.debug(`${outcome} ${file.key}`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          report.add(file.key, "failed", 0, message);
-          this.logger.warn(`failed ${file.key}: ${message}`);
-        }
-      }
+      for (const kind of this.kinds) await this.collectAndReport(new FeedFile(kind, idGame), now, report);
       // The ledger is saved after each game: an interrupted collection keeps what it already got.
       await this.ledger.save();
     }
     return report;
+  }
+
+  /** Collects one file and adds what happened to the report. A failure is reported and logged, never thrown. */
+  private async collectAndReport(file: FeedFile, now: Date, report: CollectReport): Promise<void> {
+    try {
+      const { outcome, bytes } = await this.collectFile(file, now);
+      report.add(file.key, outcome, bytes);
+      // Archives are the interesting events; the rest is only visible at debug level.
+      if (outcome === "archived") this.logger.info(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
+      else this.logger.debug(`${outcome} ${file.key}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      report.add(file.key, "failed", 0, message);
+      this.logger.warn(`failed ${file.key}: ${message}`);
+    }
   }
 
   private async collectFile(file: FeedFile, now: Date): Promise<{ outcome: Outcome; bytes: number }> {
