@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
 import { ApiQuery } from "./api-query.ts";
 import type { CardCatalog } from "./card-catalog.ts";
@@ -43,7 +44,11 @@ export class WebServer {
       ["/app.js", { path: join(WebServer.webDir, "app.js"), type: "text/javascript; charset=utf-8" }],
       ["/vendor/chart.js", { path: WebServer.chartJsPath(), type: "text/javascript; charset=utf-8" }],
     ]);
-    this.server = createAdaptorServer({ fetch: this.routes().fetch });
+    const app = this.routes();
+
+    // Without overrideGlobalObjects: false, the adapter replaces the global Request and Response for the whole
+    // process, where ky and the InfluxDB client also run.
+    this.server = createAdaptorServer({ fetch: app.fetch, overrideGlobalObjects: false });
   }
 
   /** Starts listening; resolves with the port actually used (useful with port 0). */
@@ -66,6 +71,27 @@ export class WebServer {
     const { catalog, indexes, images, logger } = this.parts;
     const app = new Hono();
 
+    // Answers are never cached, errors included. A route that may be cached sets its own header:
+    // the static files (no-cache) and the card images (a week).
+    app.use(async (c, next) => {
+      c.header("cache-control", "no-store");
+      await next();
+    });
+
+    // Hono only hands Error instances to onError and rethrows anything else, which would then bypass
+    // the logger and the JSON answer. A rejected string or plain object is turned into an Error here.
+    app.use(async (_c, next) => {
+      try {
+        await next();
+      } catch (error) {
+        if (error instanceof Error) {
+          throw error;
+        }
+
+        throw new Error(ErrorMessage.of(error), { cause: error });
+      }
+    });
+
     app.use(async (c, next) => {
       if (c.req.method !== "GET") {
         return c.json({ error: "Only GET is supported" }, 405);
@@ -81,12 +107,6 @@ export class WebServer {
         return c.body(bytes, 200, { "content-type": file.type, "cache-control": "no-cache" });
       });
     }
-
-    // API answers change with every import: never cached. The image route sets its own header.
-    app.use("/api/*", async (c, next) => {
-      c.header("cache-control", "no-store");
-      await next();
-    });
 
     app.get("/api/search", async (c) => {
       const query = new ApiQuery(c.req.query());

@@ -12,15 +12,21 @@ export interface RemoteVersion {
 
 export class CardmarketClient {
   static readonly defaultBaseUrl = "https://downloads.s3.cardmarket.com/productCatalog";
+  /** The largest file (Magic price guide) is ~26 MB: generous margin for a slow connection. */
+  static readonly timeoutMs = 120_000;
 
   private readonly baseUrl: string;
   private readonly http: KyInstance;
 
-  constructor(baseUrl = CardmarketClient.defaultBaseUrl, attempts = 3, retryDelayMs = 5_000) {
+  constructor(
+    baseUrl = CardmarketClient.defaultBaseUrl,
+    attempts = 3,
+    retryDelayMs = 5_000,
+    timeoutMs = CardmarketClient.timeoutMs,
+  ) {
     this.baseUrl = baseUrl;
     this.http = ky.create({
-      // The largest file (Magic price guide) is ~26 MB: generous margin for a slow connection.
-      timeout: 120_000,
+      timeout: timeoutMs,
       // Retry on network errors, timeouts and 5xx / 429 responses.
       retry: {
         limit: attempts - 1,
@@ -49,10 +55,12 @@ export class CardmarketClient {
     };
   }
 
-  /** Raw file content, as published. */
+  /** Raw file content, as published. Fails with a TimeoutError when the transfer stalls. */
   async download(file: FeedFile): Promise<Buffer> {
-    const response = await this.http.get(this.urlOf(file));
-    const bytes = await response.arrayBuffer();
+    const request = this.http.get(this.urlOf(file));
+    // ky's own arrayBuffer() keeps the timeout running while the body downloads.
+    // Reading the body from an awaited Response would wait forever on a stalled transfer.
+    const bytes = await request.arrayBuffer();
 
     return Buffer.from(bytes);
   }

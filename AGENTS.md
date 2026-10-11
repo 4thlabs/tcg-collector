@@ -151,6 +151,12 @@ Prettier (`.prettierrc.json`) does the layout, ESLint (`eslint.config.js`) check
 - The web server (`src/web/web-server.ts`) uses [Hono](https://hono.dev): one `app.get(...)` per route, so the route
   list reads like a table of contents. Query parameters are checked by `ApiQuery`, which throws Hono's
   `HTTPException(400)`; `onError` turns that into a JSON error and hides every other failure behind a 500.
+- HTTP clients use [ky](https://github.com/sindresorhus/ky). Read a body through ky's own methods
+  (`const request = http.get(url)`, then `await request.arrayBuffer()` or `.json()`), never from an awaited
+  `Response`: only ky's methods keep the timeout running while the body downloads. Splitting a call into steps
+  (rule 10) must not lose that.
+- The web server is created with `overrideGlobalObjects: false`, so the Hono adapter leaves the global `Request` and
+  `Response` to ky and the InfluxDB client.
 - Values from a request reach InfluxDB as query parameters, never in the SQL text.
 - The InfluxDB token only comes from the `INFLUX_TOKEN` environment variable.
 

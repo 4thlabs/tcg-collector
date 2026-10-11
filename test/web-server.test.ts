@@ -37,7 +37,12 @@ class FakeCatalog extends CardCatalog {
     return [{ product: "910771", trend: 1.24, low: 1.2, trendFoil: null }];
   }
 
-  override async latestDay(): Promise<string | null> {
+  /** Game 13 fails like a driver that rejects with a plain string instead of an Error. */
+  override async latestDay(game: string): Promise<string | null> {
+    if (game === "13") {
+      return Promise.reject("InfluxDB said no");
+    }
+
     return "2026-10-03";
   }
 
@@ -52,6 +57,9 @@ class FakeCatalog extends CardCatalog {
   }
 }
 
+/** The global Request and Response before the server starts, which it must not replace. */
+const nativeRequest = globalThis.Request;
+const nativeResponse = globalThis.Response;
 const catalog = new FakeCatalog();
 const logger = LoggerFactory.silent();
 let server: WebServer;
@@ -154,11 +162,40 @@ test("answers 404 for an unknown API and 405 for other methods", async () => {
   assert.deepEqual(await response.json(), { error: "Only GET is supported" });
 });
 
-test("never caches the API answers", async () => {
-  for (const path of ["/api/latest?game=1", "/api/latest?game=x"]) {
-    const response = await fetch(base + path);
+test("never caches the API answers, nor any error", async () => {
+  const requests = [
+    { method: "GET", path: "/api/latest?game=1" },
+    { method: "GET", path: "/api/latest?game=x" },
+    { method: "POST", path: "/api/latest?game=1" },
+    { method: "GET", path: "/favicon.ico" },
+    { method: "GET", path: "/api/latest?game=13" },
+  ];
 
-    assert.equal(response.headers.get("cache-control"), "no-store", path);
+  for (const { method, path } of requests) {
+    const response = await fetch(base + path, { method });
+
+    assert.equal(response.headers.get("cache-control"), "no-store", `${method} ${path}`);
     await response.arrayBuffer();
   }
+});
+
+test("lets browsers revalidate the page files", async () => {
+  const response = await fetch(`${base}/app.js`);
+
+  assert.equal(response.headers.get("cache-control"), "no-cache");
+  await response.arrayBuffer();
+});
+
+test("answers JSON when a dependency rejects with something that is not an Error", async () => {
+  const response = await fetch(`${base}/api/latest?game=13`);
+  const contentType = response.headers.get("content-type") ?? "";
+
+  assert.equal(response.status, 500);
+  assert.match(contentType, /^application\/json/);
+  assert.deepEqual(await response.json(), { error: "The server could not answer" });
+});
+
+test("leaves the global Request and Response alone", () => {
+  assert.equal(globalThis.Request, nativeRequest);
+  assert.equal(globalThis.Response, nativeResponse);
 });
