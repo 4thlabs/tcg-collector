@@ -11,7 +11,9 @@ export interface ImageSource {
 /** Magic: Scryfall finds a card by its Cardmarket idProduct and redirects to the image. */
 export class ScryfallImages implements ImageSource {
   async imageUrl(card: CardEntry, size: ImageSize): Promise<string | null> {
-    if (!card.single) return null;
+    if (!card.single) {
+      return null;
+    }
     return `https://api.scryfall.com/cards/cardmarket/${card.product}?format=image&version=${size}`;
   }
 }
@@ -88,23 +90,35 @@ export class SwuImages implements ImageSource {
       this.found.set(card.product, lookedUp);
     }
     const found = this.found.get(card.product);
-    if (!found) return null;
-    if (size === "small") return found.small;
+    if (!found) {
+      return null;
+    }
+    if (size === "small") {
+      return found.small;
+    }
     return found.image;
   }
 
   private async lookUp(card: CardEntry): Promise<SwuCard | null> {
-    if (!card.single) return null;
+    if (!card.single) {
+      return null;
+    }
     // "Echo Base // Experience Token" is the base: only the first face is looked up.
     const name = card.name.split(" // ")[0];
     const expansion = card.expansionId === null ? undefined : SwuImages.expansions.get(card.expansionId);
 
     const results = await this.search(name, expansion?.code);
     const wanted = SwuImages.key(name);
-    const candidates = results.filter((candidate) => SwuImages.key(SwuImages.fullName(candidate)) === wanted);
+    const isSameCard = (candidate: SwuCard) => {
+      const candidateName = SwuImages.fullName(candidate);
+      return SwuImages.key(candidateName) === wanted;
+    };
+    const candidates = results.filter(isSameCard);
 
     // Promos, prerelease and championship expansions are not in the table: any printing of the card shows its art.
-    if (!expansion) return SwuImages.anyPrinting(candidates);
+    if (!expansion) {
+      return SwuImages.anyPrinting(candidates);
+    }
     return SwuImages.pick(candidates, expansion.hyperspace, card.trendFoil !== null);
   }
 
@@ -121,7 +135,9 @@ export class SwuImages implements ImageSource {
       searchParams["filters[expansion][code][$eq]"] = setCode;
     }
     const response = await this.http.get(SwuImages.api, { searchParams });
-    if (response.status === 404) return [];
+    if (response.status === 404) {
+      return [];
+    }
     const answer = (await response.json()) as SwuAnswer;
     return SwuImages.cards(answer);
   }
@@ -138,18 +154,24 @@ export class SwuImages implements ImageSource {
   /** The Standard printing when there is one, else the first one found. */
   private static anyPrinting(candidates: SwuCard[]): SwuCard | null {
     const standard = candidates.find((card) => card.variants.includes("Standard"));
-    if (standard) return standard;
+    if (standard) {
+      return standard;
+    }
     return candidates[0] ?? null;
   }
 
   /** The printing that matches a product of a set's expansion: Standard, or Hyperspace / Showcase. */
   private static pick(candidates: SwuCard[], hyperspace: boolean, hasFoilPrice: boolean): SwuCard | null {
     const variant = (name: string) => candidates.find((card) => card.variants.includes(name)) ?? null;
-    if (!hyperspace) return variant("Standard");
+    if (!hyperspace) {
+      return variant("Standard");
+    }
     // In the Hyperspace expansion, the product with a foil price is the Showcase printing.
     if (hasFoilPrice) {
       const showcase = variant("Showcase");
-      if (showcase) return showcase;
+      if (showcase) {
+        return showcase;
+      }
     }
     return variant("Hyperspace");
   }
@@ -159,7 +181,9 @@ export class SwuImages implements ImageSource {
     const cards: SwuCard[] = [];
     for (const { attributes: card } of answer.data) {
       const art = card.artFront?.data?.attributes;
-      if (!art) continue;
+      if (!art) {
+        continue;
+      }
       const variantTypes = card.variantTypes?.data ?? [];
       cards.push({
         title: card.title,
@@ -174,7 +198,9 @@ export class SwuImages implements ImageSource {
 
   /** "Title, Subtitle", as Cardmarket names the card. */
   private static fullName(card: SwuCard): string {
-    if (!card.subtitle) return card.title;
+    if (!card.subtitle) {
+      return card.title;
+    }
     return `${card.title}, ${card.subtitle}`;
   }
 

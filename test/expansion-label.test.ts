@@ -4,11 +4,17 @@ import { ExpansionLabel } from "../src/web/expansion-label.ts";
 
 test("prefers the full set name", () => {
   assert.equal(ExpansionLabel.fromSealedNames(["Bloomburrow Booster Box", "Bloomburrow: Full Set"]), "Bloomburrow");
-  assert.equal(ExpansionLabel.fromSealedNames(["Signature Spellbook: Jace: Full Set (Sealed)"]), "Signature Spellbook: Jace");
+  assert.equal(
+    ExpansionLabel.fromSealedNames(["Signature Spellbook: Jace: Full Set (Sealed)"]),
+    "Signature Spellbook: Jace",
+  );
 });
 
 test("uses a rarity set name", () => {
-  assert.equal(ExpansionLabel.fromSealedNames(["Spark of Rebellion Booster", "Spark of Rebellion Rare Set"]), "Spark of Rebellion");
+  assert.equal(
+    ExpansionLabel.fromSealedNames(["Spark of Rebellion Booster", "Spark of Rebellion Rare Set"]),
+    "Spark of Rebellion",
+  );
 });
 
 test("takes the shortest deck prefix", () => {
@@ -17,7 +23,10 @@ test("takes the shortest deck prefix", () => {
 });
 
 test("keeps the words all the names share", () => {
-  assert.equal(ExpansionLabel.fromSealedNames(["Ashes of the Empire Booster Box", "Ashes of the Empire Carbonite Pack"]), "Ashes of the Empire");
+  assert.equal(
+    ExpansionLabel.fromSealedNames(["Ashes of the Empire Booster Box", "Ashes of the Empire Carbonite Pack"]),
+    "Ashes of the Empire",
+  );
 });
 
 test("falls back to the shortest name without its packaging", () => {

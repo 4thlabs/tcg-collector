@@ -4,6 +4,7 @@
 import { Point } from "@influxdata/influxdb3-client";
 import { InfluxDay } from "../influx/influx-day.ts";
 import type { InfluxReader } from "../influx/influx-reader.ts";
+import { ErrorMessage } from "../logging/error-message.ts";
 
 /**
  * Table "import_log", one point per imported file and day (timestamp: the archive day at 00:00 UTC).
@@ -28,7 +29,9 @@ export class ImportLedger {
         lastDays.set(String(row.file), InfluxDay.of(row.day));
       }
     } catch (error) {
-      if (!ImportLedger.isMissing(error)) throw error;
+      if (!ImportLedger.isMissing(error)) {
+        throw error;
+      }
     }
     return new ImportLedger(lastDays);
   }
@@ -60,7 +63,7 @@ export class ImportLedger {
    * stops the import rather than starting over from the first archive.
    */
   private static isMissing(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = ErrorMessage.of(error);
     return /database not found|table '[^']*' not found/.test(message);
   }
 }

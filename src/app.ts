@@ -43,7 +43,8 @@ export class App {
 
   /** Reloads the ledger on each call: every collection starts from the state on disk. */
   async createCollector(): Promise<Collector> {
-    const ledger = await FingerprintLedger.open(join(this.options.dataDir, "ledger.json"));
+    const ledgerPath = join(this.options.dataDir, "ledger.json");
+    const ledger = await FingerprintLedger.open(ledgerPath);
     return new Collector(this.client, ledger, this.archive(), this.logger);
   }
 
@@ -71,10 +72,11 @@ export class App {
       ["1", new ScryfallImages()],
       ["21", new SwuImages(http)],
     ]);
+    const imageFolder = join(this.options.dataDir, "images");
     return new WebServer({
       catalog,
       indexes: new CatalogIndexes(catalog, this.logger),
-      images: new CardImages(join(this.options.dataDir, "images"), http, sources),
+      images: new CardImages(imageFolder, http, sources),
       logger: this.logger,
     });
   }
@@ -83,12 +85,17 @@ export class App {
   private influxSettings(): InfluxSettings {
     const { influxUrl, influxDatabase } = this.options;
     const token = process.env.INFLUX_TOKEN;
-    if (!influxUrl) throw new Error("No InfluxDB URL: set --influx-url or INFLUX_URL");
-    if (!token) throw new Error("No InfluxDB token: set INFLUX_TOKEN");
+    if (!influxUrl) {
+      throw new Error("No InfluxDB URL: set --influx-url or INFLUX_URL");
+    }
+    if (!token) {
+      throw new Error("No InfluxDB token: set INFLUX_TOKEN");
+    }
     return { url: influxUrl, database: influxDatabase, token };
   }
 
   private archive(): SnapshotArchive {
-    return new SnapshotArchive(join(this.options.dataDir, "archive"));
+    const archiveFolder = join(this.options.dataDir, "archive");
+    return new SnapshotArchive(archiveFolder);
   }
 }

@@ -78,7 +78,9 @@ export class CardCatalog {
   async latestDay(game: string): Promise<string | null> {
     const rows = await this.reader.query(`SELECT max(time) AS day FROM price WHERE game = $game`, { game });
     const day = rows[0]?.day;
-    if (day == null) return null;
+    if (day == null) {
+      return null;
+    }
     return InfluxDay.of(day);
   }
 
@@ -93,7 +95,9 @@ export class CardCatalog {
        LIMIT 1`,
       { game, product },
     );
-    if (rows.length === 0) return null;
+    if (rows.length === 0) {
+      return null;
+    }
     return CardCatalog.toPrices(rows[0], rows[0].time);
   }
 
@@ -118,7 +122,9 @@ export class CardCatalog {
     const prices = rows.map((row) => CardCatalog.toPrices(row, row.day));
     const hasPrice = (day: Prices) => priceFields.some((field) => day[field] !== null);
     const first = prices.findIndex(hasPrice);
-    if (first < 0) return [];
+    if (first < 0) {
+      return [];
+    }
     return prices.slice(first);
   }
 
@@ -143,7 +149,9 @@ export class CardCatalog {
   }
 
   private static numberOrNull(value: unknown): number | null {
-    if (value == null) return null;
+    if (value == null) {
+      return null;
+    }
     return Number(value);
   }
 }

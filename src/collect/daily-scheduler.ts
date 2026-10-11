@@ -1,4 +1,5 @@
 // Runs a task once a day at a fixed time (UTC), without depending on cron.
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
 
 export class DailyScheduler {
@@ -10,7 +11,9 @@ export class DailyScheduler {
   /** at: UTC time formatted as "HH:MM". */
   constructor(at: string, task: () => Promise<void>, logger: Logger) {
     const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(at);
-    if (!match) throw new Error(`Invalid time: "${at}" (expected HH:MM, in UTC)`);
+    if (!match) {
+      throw new Error(`Invalid time: "${at}" (expected HH:MM, in UTC)`);
+    }
     this.hour = Number(match[1]);
     this.minute = Number(match[2]);
     this.task = task;
@@ -43,7 +46,7 @@ export class DailyScheduler {
     try {
       await this.task();
     } catch (error) {
-      this.logger.error(`Collection failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(`Collection failed: ${ErrorMessage.of(error)}`);
     }
   }
 }

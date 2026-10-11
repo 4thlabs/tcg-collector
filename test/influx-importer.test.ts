@@ -16,7 +16,7 @@ import { SnapshotArchive } from "../src/storage/snapshot-archive.ts";
 
 const settings = { url: "http://influx.invalid", database: "cardmarket", token: "test" };
 
-/** Fake InfluxDB: keeps the written lines (line protocol, timestamps in seconds); the import log goes to its own list. */
+/** Fake InfluxDB: keeps the written lines (line protocol, timestamps in seconds); the import log has its own list. */
 class FakeWriter extends InfluxWriter {
   lines: string[] = [];
   log: string[] = [];
@@ -39,7 +39,10 @@ class FakeWriter extends InfluxWriter {
   }
 }
 
-/** Answers the ledger's query from the import log the fake writer kept, like InfluxDB before the first import when it is empty. */
+/**
+ * Answers the ledger's query from the import log the fake writer kept,
+ * like InfluxDB before the first import when it is empty.
+ */
 class FakeReader extends InfluxReader {
   private readonly writer: FakeWriter;
 
@@ -49,7 +52,9 @@ class FakeReader extends InfluxReader {
   }
 
   override async query(): Promise<Row[]> {
-    if (this.writer.log.length === 0) throw new Error("Cannot retrieve database: External error: database not found: cardmarket");
+    if (this.writer.log.length === 0) {
+      throw new Error("Cannot retrieve database: External error: database not found: cardmarket");
+    }
     const lastDays = new Map<string, number>();
     for (const line of this.writer.log) {
       const [, file, seconds] = /file=(\S+?)[ ,].* (\d+)$/.exec(line) ?? [];
@@ -74,11 +79,24 @@ async function setup() {
   const archive = new SnapshotArchive(join(dir, "archive"));
   const writer = new FakeWriter();
   const storePrices = (day: string, entries: PriceGuideEntry[]) =>
-    archive.store(new FeedFile(FeedKind.priceGuide, 21), day, Buffer.from(JSON.stringify({ version: 1, createdAt: day, priceGuides: entries })));
+    archive.store(
+      new FeedFile(FeedKind.priceGuide, 21),
+      day,
+      Buffer.from(JSON.stringify({ version: 1, createdAt: day, priceGuides: entries })),
+    );
   const storeCatalogue = (day: string, products: ProductEntry[]) =>
-    archive.store(new FeedFile(FeedKind.singles, 21), day, Buffer.from(JSON.stringify({ version: 1, createdAt: day, products })));
+    archive.store(
+      new FeedFile(FeedKind.singles, 21),
+      day,
+      Buffer.from(JSON.stringify({ version: 1, createdAt: day, products })),
+    );
   const run = async (replay = false) => {
-    const importer = new InfluxImporter(archive, await ImportLedger.load(new FakeReader(writer)), writer, LoggerFactory.silent());
+    const importer = new InfluxImporter(
+      archive,
+      await ImportLedger.load(new FakeReader(writer)),
+      writer,
+      LoggerFactory.silent(),
+    );
     return importer.import(GameSelection.parse("1,21"), replay);
   };
   return { writer, storePrices, storeCatalogue, run };
@@ -101,12 +119,15 @@ test("imports a catalogue, then only the products that are new or changed", asyn
   await storeCatalogue("2026-09-30", [product(1, "Director Krennic"), product(2, "Iden Versio"), product(3, "Vader")]);
   await run();
 
-  assert.deepEqual(writer.lines.map((line) => line.replace(/ .*? (\d+)$/, " … $1")), [
-    "product,game=21,product=1 … 1790553600",
-    "product,game=21,product=2 … 1790553600",
-    "product,game=21,product=1 … 1790726400",
-    "product,game=21,product=3 … 1790726400",
-  ]);
+  assert.deepEqual(
+    writer.lines.map((line) => line.replace(/ .*? (\d+)$/, " … $1")),
+    [
+      "product,game=21,product=1 … 1790553600",
+      "product,game=21,product=2 … 1790553600",
+      "product,game=21,product=1 … 1790726400",
+      "product,game=21,product=3 … 1790726400",
+    ],
+  );
   assert.match(writer.lines[2] ?? "", /name="Director Krennic"/);
   assert.match(writer.lines[2] ?? "", /category="Star Wars Unlimited Single"/);
   assert.match(writer.lines[2] ?? "", /id_expansion=5618i/);

@@ -1,6 +1,7 @@
 // Collection: for each game and file type, archives today's version when its content changed.
 import type { CardmarketClient } from "../cardmarket/cardmarket-client.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
 import { ContentFingerprint } from "../storage/content-fingerprint.ts";
 import type { FingerprintLedger } from "../storage/fingerprint-ledger.ts";
@@ -57,7 +58,7 @@ export class Collector {
         this.logger.debug(`${outcome} ${file.key}`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = ErrorMessage.of(error);
       report.add(file.key, "failed", 0, message);
       this.logger.warn(`failed ${file.key}: ${message}`);
     }
@@ -65,7 +66,9 @@ export class Collector {
 
   private async collectFile(file: FeedFile, now: Date): Promise<{ outcome: Outcome; bytes: number }> {
     const version = await this.client.probe(file);
-    if (!version) return { outcome: "absent", bytes: 0 };
+    if (!version) {
+      return { outcome: "absent", bytes: 0 };
+    }
 
     const previous = this.ledger.entry(file.key);
     const checkedAt = now.toISOString();

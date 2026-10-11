@@ -122,7 +122,9 @@ export class CatalogIndex {
     const found: ScoredCard[] = [];
     for (const hit of hits) {
       const card = this.cards.get(String(hit.id));
-      if (!card || !filter(card)) continue;
+      if (!card || !filter(card)) {
+        continue;
+      }
       found.push({ card, score: hit.score });
     }
     found.sort((a, b) => b.score - a.score || CatalogIndex.newestFirst(a.card, b.card));
@@ -153,7 +155,9 @@ export class CatalogIndex {
   private static numberVersions(cards: CardEntry[]): void {
     const groups = Map.groupBy(cards, (card) => `${card.expansionId}/${card.name}`);
     for (const group of groups.values()) {
-      if (group.length < 2) continue;
+      if (group.length < 2) {
+        continue;
+      }
       group.sort((a, b) => Number(a.product) - Number(b.product));
       for (const [index, card] of group.entries()) {
         card.version = index + 1;
@@ -167,15 +171,25 @@ export class CatalogIndex {
   }
 
   private static passes(card: CardEntry, request: SearchRequest): boolean {
-    if (request.expansionId !== undefined && card.expansionId !== request.expansionId) return false;
-    if (request.kind === "single" && !card.single) return false;
-    if (request.kind === "sealed" && card.single) return false;
+    if (request.expansionId !== undefined && card.expansionId !== request.expansionId) {
+      return false;
+    }
+    if (request.kind === "single" && !card.single) {
+      return false;
+    }
+    if (request.kind === "sealed" && card.single) {
+      return false;
+    }
     // A price filter leaves out the cards without a trend price.
     if (request.minTrend !== undefined) {
-      if (card.trend === null || card.trend < request.minTrend) return false;
+      if (card.trend === null || card.trend < request.minTrend) {
+        return false;
+      }
     }
     if (request.maxTrend !== undefined) {
-      if (card.trend === null || card.trend > request.maxTrend) return false;
+      if (card.trend === null || card.trend > request.maxTrend) {
+        return false;
+      }
     }
     return true;
   }
@@ -193,16 +207,24 @@ export class CatalogIndex {
 
   /** Compares trend prices, ascending (direction 1) or descending (-1); cards without a trend go last either way. */
   private static byTrend(a: CardEntry, b: CardEntry, direction: 1 | -1): number {
-    if (a.trend === null && b.trend === null) return 0;
-    if (a.trend === null) return 1;
-    if (b.trend === null) return -1;
+    if (a.trend === null && b.trend === null) {
+      return 0;
+    }
+    if (a.trend === null) {
+      return 1;
+    }
+    if (b.trend === null) {
+      return -1;
+    }
     return direction * (a.trend - b.trend);
   }
 
   /** Most recently added first; between products added the same day, the highest idProduct first. */
   private static newestFirst(a: CardEntry, b: CardEntry): number {
     const byDate = (b.added ?? "").localeCompare(a.added ?? "");
-    if (byDate !== 0) return byDate;
+    if (byDate !== 0) {
+      return byDate;
+    }
     return Number(b.product) - Number(a.product);
   }
 
@@ -210,7 +232,9 @@ export class CatalogIndex {
   private static expansionLabels(products: readonly ProductRecord[]): Map<number, string> {
     const sealedNames = new Map<number, string[]>();
     for (const record of products) {
-      if (record.expansionId === null || CatalogIndex.isSingle(record.category)) continue;
+      if (record.expansionId === null || CatalogIndex.isSingle(record.category)) {
+        continue;
+      }
       const names = sealedNames.get(record.expansionId) ?? [];
       names.push(record.name);
       sealedNames.set(record.expansionId, names);
@@ -219,7 +243,9 @@ export class CatalogIndex {
     const labels = new Map<number, string>();
     for (const [id, names] of sealedNames) {
       const label = ExpansionLabel.fromSealedNames(names);
-      if (!label) continue;
+      if (!label) {
+        continue;
+      }
       labels.set(id, label);
     }
     return labels;
@@ -229,14 +255,18 @@ export class CatalogIndex {
   private static expansionOptions(cards: readonly CardEntry[]): ExpansionOption[] {
     const options = new Map<number, ExpansionOption>();
     for (const card of cards) {
-      if (card.expansionId === null || card.expansion === null) continue;
+      if (card.expansionId === null || card.expansion === null) {
+        continue;
+      }
       let option = options.get(card.expansionId);
       if (!option) {
         option = { id: card.expansionId, label: card.expansion, added: null, count: 0 };
         options.set(card.expansionId, option);
       }
       option.count++;
-      if (!card.added) continue;
+      if (!card.added) {
+        continue;
+      }
       if (option.added === null || card.added > option.added) {
         option.added = card.added;
       }
@@ -247,7 +277,9 @@ export class CatalogIndex {
   /** Most recently added first; then by label. */
   private static newestExpansionFirst(a: ExpansionOption, b: ExpansionOption): number {
     const byDate = (b.added ?? "").localeCompare(a.added ?? "");
-    if (byDate !== 0) return byDate;
+    if (byDate !== 0) {
+      return byDate;
+    }
     return a.label.localeCompare(b.label);
   }
 }

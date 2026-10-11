@@ -47,7 +47,9 @@ export class SnapshotArchive {
       const days = archives.map((name) => name.slice(0, 10));
       return days.sort();
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
       throw error;
     }
   }

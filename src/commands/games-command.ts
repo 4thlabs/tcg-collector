@@ -1,5 +1,6 @@
 // games: lists the games published by Cardmarket and their file sizes, without downloading anything.
 // The table is the command's output, not a log, so it goes straight to stdout.
+/* eslint-disable no-console */
 import { Command } from "commander";
 import type { App } from "../app.ts";
 import type { CardmarketClient } from "../cardmarket/cardmarket-client.ts";
@@ -25,7 +26,9 @@ export class GamesCommand {
         for (const idGame of GameSelection.parse(options.games).ids) {
           const sizes = await GamesCommand.fileSizes(client, idGame);
           // A game id without any file is not a published game.
-          if (sizes.every((size) => size === undefined)) continue;
+          if (sizes.every((size) => size === undefined)) {
+            continue;
+          }
           for (const size of sizes) {
             total += size ?? 0;
           }
@@ -37,7 +40,8 @@ export class GamesCommand {
 
   /** Size in bytes of each file of a game, in the order of FeedKind.all; undefined for a file that does not exist. */
   private static async fileSizes(client: CardmarketClient, idGame: number): Promise<(number | undefined)[]> {
-    const versions = await Promise.all(FeedKind.all.map((kind) => client.probe(new FeedFile(kind, idGame))));
+    const files = FeedKind.all.map((kind) => new FeedFile(kind, idGame));
+    const versions = await Promise.all(files.map((file) => client.probe(file)));
     return versions.map((version) => version?.size);
   }
 

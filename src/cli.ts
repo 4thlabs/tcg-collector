@@ -8,6 +8,7 @@ import { GamesCommand } from "./commands/games-command.ts";
 import { ImportCommand } from "./commands/import-command.ts";
 import { ScheduleCommand } from "./commands/schedule-command.ts";
 import { ServeCommand } from "./commands/serve-command.ts";
+import { ErrorMessage } from "./logging/error-message.ts";
 import { type LogFormat, LoggerFactory } from "./logging/logger-factory.ts";
 
 interface GlobalOptions {
@@ -75,6 +76,6 @@ class Cli {
 try {
   await new Cli().run(process.argv);
 } catch (error) {
-  LoggerFactory.create().error(error instanceof Error ? error.message : String(error));
+  LoggerFactory.create().error(ErrorMessage.of(error));
   process.exitCode = 1;
 }

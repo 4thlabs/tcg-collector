@@ -37,10 +37,14 @@ export class CardImages {
   /** The card's image, or null when its game has no image source or the source has no image for it. */
   async get(game: string, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
     const source = this.sources.get(game);
-    if (!source) return null;
+    if (!source) {
+      return null;
+    }
     const key = `${game}/${size}/${card.product}`;
     const running = this.pending.get(key);
-    if (running) return running;
+    if (running) {
+      return running;
+    }
     const base = join(this.folder, game, size, card.product);
     const loading = this.load(source, base, card, size);
     this.pending.set(key, loading);
@@ -58,9 +62,14 @@ export class CardImages {
   private async load(source: ImageSource, base: string, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
     for (const [extension, type] of CardImages.types) {
       const bytes = await CardImages.readIfPresent(`${base}.${extension}`);
-      if (bytes) return { bytes, type };
+      if (bytes) {
+        return { bytes, type };
+      }
     }
-    if (await CardImages.readIfPresent(`${base}.none`)) return null;
+    const knownWithoutImage = await CardImages.readIfPresent(`${base}.none`);
+    if (knownWithoutImage) {
+      return null;
+    }
 
     const image = await this.download(source, card, size);
     if (image) {
@@ -75,13 +84,19 @@ export class CardImages {
   /** The image from the game's source, or null when the source has none or answers with a type not kept here. */
   private async download(source: ImageSource, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
     const url = await source.imageUrl(card, size);
-    if (!url) return null;
+    if (!url) {
+      return null;
+    }
     const response = await this.http.get(url, { headers: { accept: "image/*" } });
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+      return null;
+    }
     // "image/jpeg; charset=…" -> "image/jpeg"
     const contentType = response.headers.get("content-type") ?? "";
     const type = contentType.split(";")[0].trim();
-    if (!CardImages.extensionOf(type)) return null;
+    if (!CardImages.extensionOf(type)) {
+      return null;
+    }
     const bytes = await response.arrayBuffer();
     return { bytes: Buffer.from(bytes), type };
   }
@@ -89,7 +104,9 @@ export class CardImages {
   /** File extension of an image type kept here, e.g. "jpg" for "image/jpeg"; undefined for any other type. */
   private static extensionOf(type: string): string | undefined {
     for (const [extension, known] of CardImages.types) {
-      if (known === type) return extension;
+      if (known === type) {
+        return extension;
+      }
     }
     return undefined;
   }
@@ -98,7 +115,9 @@ export class CardImages {
     try {
       return await readFile(path);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
       throw error;
     }
   }

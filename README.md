@@ -126,7 +126,7 @@ The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.
 
 `.github/workflows/ci.yml`, on every PR and every commit to `main`:
 
-1. typecheck and tests, on Node 22.18 and 24;
+1. typecheck, lint (ESLint), format check (Prettier) and tests, on Node 22.18 and 24;
 2. Docker image build, and a check that the CLI starts in it;
 3. on `main` only: publication of the image to ghcr.io.
 
@@ -162,6 +162,8 @@ src/web/polite-http.ts               HTTP client for the image sites, requests s
 src/web/expansion-label.ts           expansion name guessed from its sealed products
 web/                                 the card page: index.html, style.css, app.js (browser code)
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
+src/logging/error-message.ts         text of an error caught as unknown
 ```
 
-Tests: `npm test`. Typecheck: `npm run typecheck`. Conventions for contributors and coding agents: [AGENTS.md](AGENTS.md).
+`npm run check` runs the typecheck, the lint, the format check and the tests; `npm run format` formats the code with
+Prettier. Conventions for contributors and coding agents, including the readability rules: [AGENTS.md](AGENTS.md).

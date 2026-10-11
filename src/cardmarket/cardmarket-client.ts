@@ -37,7 +37,9 @@ export class CardmarketClient {
     const response = await this.http.head(this.urlOf(file), {
       throwHttpErrors: (status) => status !== 403 && status !== 404,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return null;
+    }
     return {
       etag: response.headers.get("etag") ?? "",
       lastModified: response.headers.get("last-modified") ?? "",

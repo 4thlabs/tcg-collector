@@ -23,7 +23,13 @@ class FakeCatalog extends CardCatalog {
   override async products(): Promise<ProductRecord[]> {
     return [
       { product: "910771", name: "Sol Ring", category: "Magic Single", expansionId: 6572, added: "2026-09-21" },
-      { product: "1", name: "Commander: Foundations Display", category: "Magic Display", expansionId: 6572, added: "2026-09-21" },
+      {
+        product: "1",
+        name: "Commander: Foundations Display",
+        category: "Magic Display",
+        expansionId: 6572,
+        added: "2026-09-21",
+      },
     ];
   }
 
@@ -71,25 +77,48 @@ test("serves the page and Chart.js", async () => {
 });
 
 test("serves nothing else from disk", async () => {
-  for (const path of ["/package.json", "/../package.json", "/web/index.html"]) assert.equal((await get(path)).status, 404, path);
+  for (const path of ["/package.json", "/../package.json", "/web/index.html"]) {
+    assert.equal((await get(path)).status, 404, path);
+  }
 });
 
 test("searches, filters and describes cards", async () => {
   const search = (await get("/api/search?game=1&q=sol%20rin&kind=single")).body as SearchResult;
   assert.equal(search.total, 1);
-  assert.deepEqual({ ...search.cards[0] }, {
-    product: "910771", name: "Sol Ring", single: true, expansionId: 6572, expansion: "Commander: Foundations",
-    version: null, added: "2026-09-21", trend: 1.24, low: 1.2, trendFoil: null,
-  });
+  assert.deepEqual(
+    { ...search.cards[0] },
+    {
+      product: "910771",
+      name: "Sol Ring",
+      single: true,
+      expansionId: 6572,
+      expansion: "Commander: Foundations",
+      version: null,
+      added: "2026-09-21",
+      trend: 1.24,
+      low: 1.2,
+      trendFoil: null,
+    },
+  );
   assert.equal(((await get("/api/search?game=1&kind=sealed")).body as SearchResult).cards[0].product, "1");
   assert.deepEqual((await get("/api/card?game=1&product=42")).body, { card: null });
-  assert.deepEqual((await get("/api/expansions?game=1")).body, { expansions: [{ id: 6572, label: "Commander: Foundations", added: "2026-09-21", count: 2 }] });
+  assert.deepEqual((await get("/api/expansions?game=1")).body, {
+    expansions: [{ id: 6572, label: "Commander: Foundations", added: "2026-09-21", count: 2 }],
+  });
   assert.deepEqual((await get("/api/prices?game=21&product=903189")).body, { prices: null });
   assert.deepEqual(catalog.calls, ["prices 21 903189"]);
 });
 
 test("refuses bad parameters before querying", async () => {
-  for (const query of ["search?game=x", "search?game=1&kind=foil", "search?game=1&min=-1", "search?game=1&limit=1000", "prices?game=1&product=1'--", "daily?game=1&product=1&days=0", "image?game=1&product=1&size=huge"]) {
+  for (const query of [
+    "search?game=x",
+    "search?game=1&kind=foil",
+    "search?game=1&min=-1",
+    "search?game=1&limit=1000",
+    "prices?game=1&product=1'--",
+    "daily?game=1&product=1&days=0",
+    "image?game=1&product=1&size=huge",
+  ]) {
     assert.equal((await get(`/api/${query}`)).status, 400, query);
   }
   assert.equal(catalog.calls.length, 1);
@@ -100,7 +129,10 @@ test("answers 404 for a game without images", async () => {
 });
 
 test("hides database errors behind a 500", async () => {
-  assert.deepEqual(await get("/api/daily?game=1&product=910771&days=30"), { status: 500, body: { error: "The server could not answer" } });
+  assert.deepEqual(await get("/api/daily?game=1&product=910771&days=30"), {
+    status: 500,
+    body: { error: "The server could not answer" },
+  });
 });
 
 test("tells the day of the latest price guide", async () => {

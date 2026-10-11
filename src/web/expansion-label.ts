@@ -29,25 +29,37 @@ export class ExpansionLabel {
   static fromSealedNames(names: readonly string[]): string | null {
     for (const pattern of [ExpansionLabel.fullSet, ExpansionLabel.raritySet]) {
       const match = ExpansionLabel.firstMatch(names, pattern);
-      if (match) return ExpansionLabel.clean(match[1]);
+      if (match) {
+        return ExpansionLabel.clean(match[1]);
+      }
     }
 
     const deckPrefixes = ExpansionLabel.deckPrefixes(names);
-    if (deckPrefixes.length > 0) return ExpansionLabel.clean(ExpansionLabel.shortest(deckPrefixes));
+    if (deckPrefixes.length > 0) {
+      const shortestPrefix = ExpansionLabel.shortest(deckPrefixes);
+      return ExpansionLabel.clean(shortestPrefix);
+    }
 
     const shared = ExpansionLabel.sharedWords(names);
-    if (shared.length >= 4) return shared;
+    if (shared.length >= 4) {
+      return shared;
+    }
 
-    if (names.length === 0) return null;
+    if (names.length === 0) {
+      return null;
+    }
     const shortest = ExpansionLabel.shortest(names);
-    const withoutPackaging = ExpansionLabel.clean(shortest.replace(ExpansionLabel.packaging, ""));
-    return withoutPackaging || shortest;
+    const withoutPackaging = shortest.replace(ExpansionLabel.packaging, "");
+    // A name that is only packaging ("Booster Box") keeps its full text.
+    return ExpansionLabel.clean(withoutPackaging) || shortest;
   }
 
   private static firstMatch(names: readonly string[], pattern: RegExp): RegExpExecArray | null {
     for (const name of names) {
       const match = pattern.exec(name);
-      if (match) return match;
+      if (match) {
+        return match;
+      }
     }
     return null;
   }
@@ -57,7 +69,9 @@ export class ExpansionLabel {
     const prefixes: string[] = [];
     for (const name of names) {
       const match = ExpansionLabel.deck.exec(name);
-      if (!match) continue;
+      if (!match) {
+        continue;
+      }
       prefixes.push(match[1]);
     }
     return prefixes;
@@ -65,11 +79,15 @@ export class ExpansionLabel {
 
   /** Leading words common to every name (at least two names), without a trailing separator. */
   private static sharedWords(names: readonly string[]): string {
-    if (names.length < 2) return "";
+    if (names.length < 2) {
+      return "";
+    }
     const [first, ...others] = names.map((name) => name.split(" "));
     const shared: string[] = [];
     for (const [index, word] of first.entries()) {
-      if (others.some((words) => words[index] !== word)) break;
+      if (others.some((words) => words[index] !== word)) {
+        break;
+      }
       shared.push(word);
     }
     const withoutSeparator = shared.join(" ").replace(/[:\-–]$/, "");
@@ -77,7 +95,13 @@ export class ExpansionLabel {
   }
 
   private static shortest(names: readonly string[]): string {
-    return names.reduce((a, b) => (b.length < a.length ? b : a));
+    let shortest = names[0];
+    for (const name of names) {
+      if (name.length < shortest.length) {
+        shortest = name;
+      }
+    }
+    return shortest;
   }
 
   private static clean(text: string): string {

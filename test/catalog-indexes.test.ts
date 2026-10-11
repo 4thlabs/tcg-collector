@@ -17,7 +17,9 @@ class FakeCatalog extends CardCatalog {
 
   override async products(): Promise<ProductRecord[]> {
     this.loads++;
-    if (this.failing) throw new Error("InfluxDB is down");
+    if (this.failing) {
+      throw new Error("InfluxDB is down");
+    }
     return [{ product: "1", name: this.name, category: "Magic Single", expansionId: 1, added: null }];
   }
 

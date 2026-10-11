@@ -1,4 +1,5 @@
 // Keeps one search index per game in memory, built on first use and rebuilt in the background once it is old.
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
 import type { CardCatalog } from "./card-catalog.ts";
 import { CatalogIndex } from "./catalog-index.ts";
@@ -27,7 +28,9 @@ export class CatalogIndexes {
   /** Index of a game: built on the first call, then rebuilt in the background once it is old. */
   get(game: string): Promise<CatalogIndex> {
     const entry = this.entries.get(game);
-    if (!entry) return this.buildFirst(game);
+    if (!entry) {
+      return this.buildFirst(game);
+    }
     const ageMs = this.now() - entry.since;
     if (ageMs > CatalogIndexes.maxAgeMs) {
       this.rebuildInBackground(game, entry);
@@ -56,16 +59,13 @@ export class CatalogIndexes {
   private async build(game: string): Promise<CatalogIndex> {
     const started = this.now();
     try {
-      const [products, trends] = await Promise.all([
-        this.catalog.products(game),
-        this.catalog.latestTrends(game),
-      ]);
+      const [products, trends] = await Promise.all([this.catalog.products(game), this.catalog.latestTrends(game)]);
       const index = new CatalogIndex(products, trends);
       const durationMs = this.now() - started;
       this.logger.info(`search index of game ${game}: ${index.size} products in ${durationMs} ms`);
       return index;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = ErrorMessage.of(error);
       this.logger.warn(`search index of game ${game} failed: ${message}`);
       throw error;
     }

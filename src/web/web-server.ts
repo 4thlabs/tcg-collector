@@ -66,7 +66,9 @@ export class WebServer {
     const app = new Hono();
 
     app.use(async (c, next) => {
-      if (c.req.method !== "GET") return c.json({ error: "Only GET is supported" }, 405);
+      if (c.req.method !== "GET") {
+        return c.json({ error: "Only GET is supported" }, 405);
+      }
       await next();
     });
 
@@ -137,7 +139,9 @@ export class WebServer {
       const index = await indexes.get(game);
       const card = index.card(product);
       const image = card ? await images.get(game, card, size) : null;
-      if (!image) return c.json({ error: "No image" }, 404);
+      if (!image) {
+        return c.json({ error: "No image" }, 404);
+      }
       const cacheControl = `max-age=${WebServer.imageCacheSeconds}`;
       return c.body(image.bytes, 200, { "content-type": image.type, "cache-control": cacheControl });
     });
@@ -146,7 +150,9 @@ export class WebServer {
 
     // A refused parameter tells why; any other failure is logged and hidden behind a 500.
     app.onError((error, c) => {
-      if (error instanceof HTTPException) return c.json({ error: error.message }, error.status);
+      if (error instanceof HTTPException) {
+        return c.json({ error: error.message }, error.status);
+      }
       logger.warn(`${c.req.path} failed: ${error.message}`);
       return c.json({ error: "The server could not answer" }, 500);
     });
@@ -156,6 +162,7 @@ export class WebServer {
 
   /** Chart.js's browser build, from the installed package (its exports only expose the module builds). */
   private static chartJsPath(): string {
-    return join(dirname(fileURLToPath(import.meta.resolve("chart.js"))), "chart.umd.min.js");
+    const moduleEntry = fileURLToPath(import.meta.resolve("chart.js"));
+    return join(dirname(moduleEntry), "chart.umd.min.js");
   }
 }

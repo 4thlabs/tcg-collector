@@ -27,9 +27,12 @@ export class FingerprintLedger {
     try {
       const text = await readFile(path, "utf8");
       const saved = JSON.parse(text) as Record<string, LedgerEntry>;
-      return new FingerprintLedger(path, new Map(Object.entries(saved)));
+      const entries = new Map(Object.entries(saved));
+      return new FingerprintLedger(path, entries);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return new FingerprintLedger(path, new Map());
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return new FingerprintLedger(path, new Map());
+      }
       throw error;
     }
   }

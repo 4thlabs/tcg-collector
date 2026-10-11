@@ -61,7 +61,9 @@ export class InfluxImporter {
     const lastDay = replay ? undefined : this.ledger.lastDay(file.key);
     const archivedDays = await this.archive.days(file);
     const days = archivedDays.filter((day) => lastDay === undefined || day > lastDay);
-    if (days.length === 0) return imported;
+    if (days.length === 0) {
+      return imported;
+    }
 
     for await (const [day, points] of this.pointsByDay(file, days, lastDay)) {
       // The log entry goes last, with the day's points: an interrupted import resumes where it stopped.
@@ -76,7 +78,9 @@ export class InfluxImporter {
   }
 
   private pointsByDay(file: FeedFile, days: readonly string[], lastDay: string | undefined): AsyncGenerator<DayPoints> {
-    if (file.kind === FeedKind.priceGuide) return this.pricePoints(file, days);
+    if (file.kind === FeedKind.priceGuide) {
+      return this.pricePoints(file, days);
+    }
     return this.productPoints(file, days, lastDay);
   }
 
@@ -87,7 +91,9 @@ export class InfluxImporter {
       const points: Point[] = [];
       for (const entry of content.priceGuides) {
         const point = PricePointFactory.create(entry, file.idGame, day);
-        if (!point) continue;
+        if (!point) {
+          continue;
+        }
         points.push(point);
       }
       yield [day, points];
@@ -113,7 +119,9 @@ export class InfluxImporter {
       const points: Point[] = [];
       for (const entry of current.values()) {
         const before = previous.get(entry.idProduct);
-        if (!ProductPointFactory.changed(entry, before)) continue;
+        if (!ProductPointFactory.changed(entry, before)) {
+          continue;
+        }
         points.push(ProductPointFactory.create(entry, file.idGame, day));
       }
       previous = current;

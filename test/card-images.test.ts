@@ -9,16 +9,38 @@ import type { CardEntry } from "../src/web/catalog-index.ts";
 import { type ImageSource, ScryfallImages, SwuImages } from "../src/web/image-sources.ts";
 import { PoliteHttp } from "../src/web/polite-http.ts";
 
-const card = (product: string, name = "Sol Ring", expansionId: number | null = 6572, trendFoil: number | null = null): CardEntry => ({
-  product, name, single: true, expansionId, expansion: null, version: null, added: null, trend: 1, low: 1, trendFoil,
+const card = (
+  product: string,
+  name = "Sol Ring",
+  expansionId: number | null = 6572,
+  trendFoil: number | null = null,
+): CardEntry => ({
+  product,
+  name,
+  single: true,
+  expansionId,
+  expansion: null,
+  version: null,
+  added: null,
+  trend: 1,
+  low: 1,
+  trendFoil,
 });
 
 /** One printing in the answer of the Star Wars Unlimited database. */
 const swuCard = (title: string, subtitle: string | null, variant: string) => ({
   attributes: {
-    title, subtitle,
+    title,
+    subtitle,
     variantTypes: { data: [{ attributes: { name: variant } }] },
-    artFront: { data: { attributes: { url: `https://cdn.example/${variant}.png`, formats: { xxsmall: { url: `https://cdn.example/small_${variant}.png` } } } } },
+    artFront: {
+      data: {
+        attributes: {
+          url: `https://cdn.example/${variant}.png`,
+          formats: { xxsmall: { url: `https://cdn.example/small_${variant}.png` } },
+        },
+      },
+    },
   },
 });
 
@@ -30,11 +52,17 @@ function fakeWeb() {
     fetch: async (input) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       requests.push(decodeURIComponent(url.host + url.pathname + url.search));
-      if (url.host === "api.scryfall.com")
-        return url.pathname.endsWith("/910771") ? new Response(Buffer.from("jpeg bytes"), { headers: { "content-type": "image/jpeg" } }) : new Response("{}", { status: 404 });
-      if (url.host === "cdn.example") return new Response(Buffer.from(`png ${url.pathname}`), { headers: { "content-type": "image/png" } });
+      if (url.host === "api.scryfall.com") {
+        return url.pathname.endsWith("/910771")
+          ? new Response(Buffer.from("jpeg bytes"), { headers: { "content-type": "image/jpeg" } })
+          : new Response("{}", { status: 404 });
+      }
+      if (url.host === "cdn.example") {
+        return new Response(Buffer.from(`png ${url.pathname}`), { headers: { "content-type": "image/png" } });
+      }
       const set = url.searchParams.get("filters[expansion][code][$eq]");
-      const luke = url.searchParams.get("filters[title][$startsWithi]") === "Luke Skywalker" && (set === "SOR" || set === null);
+      const luke =
+        url.searchParams.get("filters[title][$startsWithi]") === "Luke Skywalker" && (set === "SOR" || set === null);
       const data = luke
         ? [
             swuCard("Luke Skywalker", "Faithful Friend", "Prerelease Promo"),
@@ -53,13 +81,17 @@ function fakeWeb() {
 async function images(sources: [string, (http: PoliteHttp) => ImageSource][]) {
   const folder = await mkdtemp(join(tmpdir(), "images-"));
   const web = fakeWeb();
-  const make = () => new CardImages(folder, web.http, new Map(sources.map(([game, source]) => [game, source(web.http)])));
+  const make = () =>
+    new CardImages(folder, web.http, new Map(sources.map(([game, source]) => [game, source(web.http)])));
   return { folder, make, requests: web.requests };
 }
 
 test("fetches an image once, then serves it from disk", async () => {
   const { folder, make, requests } = await images([["1", () => new ScryfallImages()]]);
-  assert.deepEqual(await make().get("1", card("910771"), "small"), { bytes: Buffer.from("jpeg bytes"), type: "image/jpeg" });
+  assert.deepEqual(await make().get("1", card("910771"), "small"), {
+    bytes: Buffer.from("jpeg bytes"),
+    type: "image/jpeg",
+  });
   assert.equal((await make().get("1", card("910771"), "small"))?.bytes.toString(), "jpeg bytes");
   assert.deepEqual(requests, ["api.scryfall.com/cards/cardmarket/910771?format=image&version=small"]);
   assert.deepEqual(await readdir(join(folder, "1", "small")), ["910771.jpg"]);
@@ -83,7 +115,10 @@ test("finds a Star Wars Unlimited card by expansion and name, one lookup for bot
   const { folder, make, requests } = await images([["21", (http) => new SwuImages(http)]]);
   const cardImages = make();
   const luke = card("759959", "Luke Skywalker, Faithful Friend", 5618);
-  assert.deepEqual(await cardImages.get("21", luke, "small"), { bytes: Buffer.from("png /small_Standard.png"), type: "image/png" });
+  assert.deepEqual(await cardImages.get("21", luke, "small"), {
+    bytes: Buffer.from("png /small_Standard.png"),
+    type: "image/png",
+  });
   assert.equal((await cardImages.get("21", luke, "normal"))?.bytes.toString(), "png /Standard.png");
   assert.deepEqual(requests, [
     "admin.starwarsunlimited.com/api/cards?locale=en&pagination[pageSize]=100&filters[title][$startsWithi]=Luke+Skywalker&filters[expansion][code][$eq]=SOR",
@@ -107,6 +142,9 @@ test("shows any printing of a promo, and nothing for an unknown name", async () 
   const cardImages = make();
   const promo = await cardImages.get("21", card("3", "Luke Skywalker, Faithful Friend", 6101), "small");
   assert.equal(promo?.bytes.toString(), "png /small_Standard.png");
-  assert.equal(requests[0], "admin.starwarsunlimited.com/api/cards?locale=en&pagination[pageSize]=100&filters[title][$startsWithi]=Luke+Skywalker");
+  assert.equal(
+    requests[0],
+    "admin.starwarsunlimited.com/api/cards?locale=en&pagination[pageSize]=100&filters[title][$startsWithi]=Luke+Skywalker",
+  );
   assert.equal(await cardImages.get("21", card("4", "Luke Skywalker, Hero of Yavin", 5618), "small"), null);
 });

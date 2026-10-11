@@ -4,8 +4,8 @@
 "use strict";
 
 const GAMES = {
-  "1": { name: "Magic", cardmarket: "Magic" },
-  "21": { name: "Star Wars Unlimited", cardmarket: "StarWarsUnlimited" },
+  1: { name: "Magic", cardmarket: "Magic" },
+  21: { name: "Star Wars Unlimited", cardmarket: "StarWarsUnlimited" },
 };
 
 /** Calls the JSON API of the server; errors carry the server's message. */
@@ -15,7 +15,9 @@ class Api {
     const response = await fetch(`${path}?${query}`);
     // An error page may not be JSON: the status then tells what went wrong.
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new Error(body.error ?? `HTTP ${response.status}`);
+    }
     return body;
   }
 
@@ -83,7 +85,9 @@ class PageState {
     for (const field of PageState.fields) {
       const value = state[field];
       // Default values stay out of the address, to keep it short.
-      if (!value || value === PageState.defaults[field]) continue;
+      if (!value || value === PageState.defaults[field]) {
+        continue;
+      }
       params.set(field, value);
     }
     const url = params.size ? `?${params}` : location.pathname;
@@ -104,8 +108,12 @@ class Format {
   }
 
   static expansion(card) {
-    if (card.expansion != null) return card.expansion;
-    if (card.expansionId == null) return "Unknown expansion";
+    if (card.expansion != null) {
+      return card.expansion;
+    }
+    if (card.expansionId == null) {
+      return "Unknown expansion";
+    }
     return `Expansion ${card.expansionId}`;
   }
 
@@ -141,7 +149,9 @@ class Format {
   /** Name with its version badge. */
   static nameInto(element, card) {
     element.textContent = card.name;
-    if (card.version == null) return;
+    if (card.version == null) {
+      return;
+    }
     const badge = document.createElement("span");
     badge.className = "version";
     badge.textContent = Format.version(card);
@@ -158,13 +168,17 @@ class LatestDay {
   }
 
   async show(game) {
-    if (this.game === game) return;
+    if (this.game === game) {
+      return;
+    }
     this.game = game;
     this.element.textContent = "";
     try {
       const day = await this.api.latestDay(game);
       // Another game may have been chosen meanwhile.
-      if (this.game !== game) return;
+      if (this.game !== game) {
+        return;
+      }
       this.element.textContent = day ? `Latest prices: ${day}.` : "No prices imported yet.";
     } catch {
       // The page works without it.
@@ -210,14 +224,18 @@ class Filters {
 
   /** Loads the expansions of the game (newest first), keeping the selected one. */
   async loadExpansions(game, selected) {
-    if (this.loadedGame === game) return;
+    if (this.loadedGame === game) {
+      return;
+    }
     this.loadedGame = game;
     const allExpansions = this.expansionSelect.options[0];
     this.expansionSelect.replaceChildren(allExpansions);
     try {
       const expansions = await this.api.expansions(game);
       // Another game may have been chosen meanwhile.
-      if (this.loadedGame !== game) return;
+      if (this.loadedGame !== game) {
+        return;
+      }
       const options = expansions.map((expansion) => {
         const label = `${expansion.label} (${expansion.count})`;
         return new Option(label, String(expansion.id));
@@ -267,7 +285,9 @@ class ResultList {
     try {
       const page = { ...this.params, offset: this.shown, limit: ResultList.pageSize };
       const result = await this.api.search(page);
-      if (sequence !== this.sequence) return;
+      if (sequence !== this.sequence) {
+        return;
+      }
 
       const items = result.cards.map((card) => this.item(card));
       if (fresh) {
@@ -281,7 +301,9 @@ class ResultList {
       this.summary.textContent = this.summaryText();
       this.more.hidden = this.shown >= this.total;
     } catch (error) {
-      if (sequence !== this.sequence) return;
+      if (sequence !== this.sequence) {
+        return;
+      }
       this.summary.classList.add("err");
       this.summary.textContent = `Search failed: ${error.message}.`;
     } finally {
@@ -291,9 +313,13 @@ class ResultList {
 
   /** "1,234 products, 60 shown", or a message when nothing matches. */
   summaryText() {
-    if (this.total === 0) return "No product matches these filters.";
+    if (this.total === 0) {
+      return "No product matches these filters.";
+    }
     const count = `${this.total.toLocaleString("en")} products`;
-    if (this.total <= this.shown) return count;
+    if (this.total <= this.shown) {
+      return count;
+    }
     return `${count}, ${this.shown} shown`;
   }
 
@@ -396,7 +422,8 @@ class PriceChart {
               maxRotation: 0,
               maxTicksLimit: narrow ? 4 : 8,
               callback(value) {
-                return PriceChart.shortDay(this.getLabelForValue(value), withYear);
+                const day = this.getLabelForValue(value);
+                return PriceChart.shortDay(day, withYear);
               },
             },
           },
@@ -410,7 +437,9 @@ class PriceChart {
   }
 
   redraw() {
-    if (!this.chart) return;
+    if (!this.chart) {
+      return;
+    }
     this.draw(this.days);
   }
 
@@ -443,7 +472,9 @@ class PriceChart {
   /** "2026-10-03" -> "03/10", or "03/10/26" with the year. */
   static shortDay(day, withYear) {
     const dayAndMonth = `${day.slice(8, 10)}/${day.slice(5, 7)}`;
-    if (!withYear) return dayAndMonth;
+    if (!withYear) {
+      return dayAndMonth;
+    }
     return `${dayAndMonth}/${day.slice(2, 4)}`;
   }
 }
@@ -473,7 +504,9 @@ class CardSheet {
     this.dialog.querySelector(".close").addEventListener("click", () => this.dialog.close());
     // A click on the backdrop (outside the sheet) closes it.
     this.dialog.addEventListener("click", (event) => {
-      if (event.target !== this.dialog) return;
+      if (event.target !== this.dialog) {
+        return;
+      }
       this.dialog.close();
     });
     this.dialog.addEventListener("close", () => {
@@ -501,7 +534,9 @@ class CardSheet {
   }
 
   close() {
-    if (!this.dialog.open) return;
+    if (!this.dialog.open) {
+      return;
+    }
     this.dialog.close();
   }
 
@@ -539,7 +574,9 @@ class CardSheet {
 
   rangeClicked(event) {
     const button = event.target.closest("button[data-days]");
-    if (!button) return;
+    if (!button) {
+      return;
+    }
     this.days = Number(button.dataset.days);
     this.showRange();
     this.loadDaily();
@@ -558,7 +595,9 @@ class CardSheet {
     try {
       const prices = await this.api.latestPrices(this.game, card.product);
       // Another card may have been opened meanwhile.
-      if (card !== this.card) return;
+      if (card !== this.card) {
+        return;
+      }
       if (!prices) {
         tiles.replaceChildren(Format.note("No archived price for this product."));
         return;
@@ -568,7 +607,9 @@ class CardSheet {
       tiles.replaceChildren(...shown.map((entry) => CardSheet.tile(entry, prices)));
       this.setText(".asof", `Latest archived price guide: ${prices.day}`);
     } catch (error) {
-      if (card !== this.card) return;
+      if (card !== this.card) {
+        return;
+      }
       tiles.replaceChildren(Format.note(`Prices failed: ${error.message}.`, true));
     }
   }
@@ -580,17 +621,23 @@ class CardSheet {
     try {
       const rows = await this.api.dailyPrices(this.game, card.product, days);
       // Another card or period may have been chosen meanwhile.
-      if (card !== this.card || days !== this.days) return;
+      if (card !== this.card || days !== this.days) {
+        return;
+      }
       this.chart.draw(rows);
     } catch (error) {
-      if (card !== this.card) return;
+      if (card !== this.card) {
+        return;
+      }
       this.chart.message(`Daily prices failed: ${error.message}.`, true);
     }
   }
 
   /** "Expansion · V.2"; empty for a card known only by its id (opened from the address). */
   static expansionLine(card) {
-    if (card.expansionId === undefined) return "";
+    if (card.expansionId === undefined) {
+      return "";
+    }
     const parts = [Format.expansion(card), Format.version(card)];
     return parts.filter(Boolean).join(" · ");
   }
@@ -661,7 +708,9 @@ class CardPage {
   /** A new game starts a new search, keeping only the kind and the sort order. */
   gameClicked(event) {
     const button = event.target.closest("button[data-game]");
-    if (!button || button.dataset.game === this.state.game) return;
+    if (!button || button.dataset.game === this.state.game) {
+      return;
+    }
     const { kind, sort } = this.state;
     this.state = { ...PageState.defaults, game: button.dataset.game, kind, sort };
     PageState.write(this.state, true);
@@ -672,7 +721,9 @@ class CardPage {
   async openFromAddress(game, product) {
     const card = await this.api.card(game, product).catch(() => null);
     // The address may have changed while the card loaded.
-    if (this.state.card !== product) return;
+    if (this.state.card !== product) {
+      return;
+    }
     // A card the server does not find still opens, under its id.
     const shown = card ?? { product, name: `#${product}` };
     this.sheet.open(game, shown);
@@ -691,7 +742,9 @@ class CardPage {
   }
 
   sheetClosed() {
-    if (!this.state.card) return;
+    if (!this.state.card) {
+      return;
+    }
     this.state = { ...this.state, card: "" };
     PageState.write(this.state, true);
   }
