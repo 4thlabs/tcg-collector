@@ -1,16 +1,16 @@
-// HTTP server of the card page: the static files of web/ and a small JSON API (node:http, no framework).
+// HTTP server of the card page, on Hono: the static files of web/ and a small JSON API.
 import { readFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAdaptorServer, type ServerType } from "@hono/node-server";
+import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
+import { ApiQuery } from "./api-query.ts";
 import type { CardCatalog } from "./card-catalog.ts";
-import { CardImages, type ImageSize } from "./card-images.ts";
-import type { ProductKind, SearchRequest, SortOrder } from "./catalog-index.ts";
+import type { CardImages } from "./card-images.ts";
 import type { CatalogIndexes } from "./catalog-indexes.ts";
-
-/** A request the API refuses, answered with status 400. */
-class BadRequest extends Error {}
 
 interface StaticFile {
   path: string;
@@ -28,15 +28,13 @@ export interface WebServerParts {
 export class WebServer {
   /** Folder of the page's HTML, CSS and JavaScript, at the root of the repository. */
   static readonly webDir = fileURLToPath(new URL("../../web/", import.meta.url));
-  static readonly maxDays = 3650;
-  static readonly maxLimit = 200;
-  private static readonly kinds: readonly ProductKind[] = ["all", "single", "sealed"];
-  private static readonly sorts: readonly SortOrder[] = ["relevance", "trend-desc", "trend-asc", "newest"];
+  /** Card images never change: browsers keep them a week. */
+  private static readonly imageCacheSeconds = 7 * 24 * 60 * 60;
 
   private readonly parts: WebServerParts;
-  private readonly server: Server;
   /** The only files served: URL path -> file. Nothing else on disk is reachable. */
   private readonly files: Map<string, StaticFile>;
+  private readonly server: ServerType;
 
   constructor(parts: WebServerParts) {
     this.parts = parts;
@@ -46,7 +44,11 @@ export class WebServer {
       ["/app.js", { path: join(WebServer.webDir, "app.js"), type: "text/javascript; charset=utf-8" }],
       ["/vendor/chart.js", { path: WebServer.chartJsPath(), type: "text/javascript; charset=utf-8" }],
     ]);
-    this.server = createServer((request, response) => void this.handle(request, response));
+    const app = this.routes();
+
+    // Without overrideGlobalObjects: false, the adapter replaces the global Request and Response for the whole
+    // process, where ky and the InfluxDB client also run.
+    this.server = createAdaptorServer({ fetch: app.fetch, overrideGlobalObjects: false });
   }
 
   /** Starts listening; resolves with the port actually used (useful with port 0). */
@@ -55,6 +57,7 @@ export class WebServer {
       this.server.once("error", reject);
       this.server.listen(port, host, () => {
         const address = this.server.address();
+
         resolve(typeof address === "object" && address ? address.port : port);
       });
     });
@@ -64,111 +67,137 @@ export class WebServer {
     return new Promise((resolve, reject) => this.server.close((error) => (error ? reject(error) : resolve())));
   }
 
-  private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    try {
-      if (request.method !== "GET") return this.sendJson(response, 405, { error: "Only GET is supported" });
-      if (url.pathname === "/api/image") return await this.image(url.searchParams, response);
-      if (url.pathname.startsWith("/api/")) return this.sendJson(response, 200, await this.api(url));
-      const file = this.files.get(url.pathname);
-      if (!file) return this.sendJson(response, 404, { error: "Not found" });
-      response.writeHead(200, { "content-type": file.type, "cache-control": "no-cache" });
-      response.end(await readFile(file.path));
-    } catch (error) {
-      if (error instanceof BadRequest) return this.sendJson(response, 400, { error: error.message });
-      this.parts.logger.warn(`${url.pathname} failed: ${error instanceof Error ? error.message : String(error)}`);
-      this.sendJson(response, 500, { error: "The server could not answer" });
-    }
-  }
+  private routes(): Hono {
+    const { catalog, indexes, images, logger } = this.parts;
+    const app = new Hono();
 
-  /** JSON routes: search, card, expansions, latest, prices, daily. */
-  private async api(url: URL): Promise<unknown> {
-    const query = url.searchParams;
-    const game = WebServer.id(query, "game");
-    switch (url.pathname) {
-      case "/api/search":
-        return (await this.parts.indexes.get(game)).find(WebServer.searchRequest(query));
-      case "/api/card":
-        return { card: (await this.parts.indexes.get(game)).card(WebServer.id(query, "product")) };
-      case "/api/expansions":
-        return { expansions: (await this.parts.indexes.get(game)).expansions };
-      case "/api/latest":
-        return { day: await this.parts.catalog.latestDay(game) };
-      case "/api/prices":
-        return { prices: await this.parts.catalog.latestPrices(game, WebServer.id(query, "product")) };
-      case "/api/daily": {
-        const days = WebServer.integer(query, "days", 1, WebServer.maxDays) ?? 90;
-        return { days: await this.parts.catalog.dailyPrices(game, WebServer.id(query, "product"), days) };
+    // Answers are never cached, errors included. A route that may be cached sets its own header:
+    // the static files (no-cache) and the card images (a week).
+    app.use(async (c, next) => {
+      c.header("cache-control", "no-store");
+      await next();
+    });
+
+    // Hono only hands Error instances to onError and rethrows anything else, which would then bypass
+    // the logger and the JSON answer. A rejected string or plain object is turned into an Error here.
+    app.use(async (_c, next) => {
+      try {
+        await next();
+      } catch (error) {
+        if (error instanceof Error) {
+          throw error;
+        }
+
+        throw new Error(ErrorMessage.of(error), { cause: error });
       }
-      default:
-        throw new BadRequest(`Unknown API: ${url.pathname}`);
+    });
+
+    app.use(async (c, next) => {
+      if (c.req.method !== "GET") {
+        return c.json({ error: "Only GET is supported" }, 405);
+      }
+
+      await next();
+    });
+
+    for (const [path, file] of this.files) {
+      app.get(path, async (c) => {
+        const bytes = await readFile(file.path);
+
+        return c.body(bytes, 200, { "content-type": file.type, "cache-control": "no-cache" });
+      });
     }
-  }
 
-  /** /api/image?game&product&size: the card's image, or 404 when it has none. Images never change: cached a week. */
-  private async image(query: URLSearchParams, response: ServerResponse): Promise<void> {
-    const size = query.get("size") ?? "small";
-    if (!CardImages.sizes.includes(size as ImageSize)) throw new BadRequest("size must be small or normal");
-    const game = WebServer.id(query, "game");
-    const card = (await this.parts.indexes.get(game)).card(WebServer.id(query, "product"));
-    const image = card ? await this.parts.images.get(game, card, size as ImageSize) : null;
-    if (!image) return this.sendJson(response, 404, { error: "No image" });
-    response.writeHead(200, { "content-type": image.type, "cache-control": "max-age=604800" });
-    response.end(image.bytes);
-  }
+    app.get("/api/search", async (c) => {
+      const query = new ApiQuery(c.req.query());
+      const game = query.id("game");
+      const search = query.search();
+      const index = await indexes.get(game);
 
-  private static searchRequest(query: URLSearchParams): SearchRequest {
-    const text = (query.get("q") ?? "").trim();
-    if (text.length > 100) throw new BadRequest("q must be at most 100 characters");
-    const kind = (query.get("kind") || "all") as ProductKind;
-    if (!WebServer.kinds.includes(kind)) throw new BadRequest(`kind must be one of ${WebServer.kinds.join(", ")}`);
-    const sort = (query.get("sort") || "relevance") as SortOrder;
-    if (!WebServer.sorts.includes(sort)) throw new BadRequest(`sort must be one of ${WebServer.sorts.join(", ")}`);
-    const expansion = query.get("expansion");
-    return {
-      text,
-      kind,
-      sort,
-      expansionId: expansion ? Number(WebServer.id(query, "expansion")) : undefined,
-      minTrend: WebServer.price(query, "min"),
-      maxTrend: WebServer.price(query, "max"),
-      offset: WebServer.integer(query, "offset", 0, 1_000_000) ?? 0,
-      limit: WebServer.integer(query, "limit", 1, WebServer.maxLimit) ?? 60,
-    };
-  }
+      return c.json(index.find(search));
+    });
 
-  private sendJson(response: ServerResponse, status: number, body: unknown): void {
-    response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    response.end(JSON.stringify(body));
-  }
+    app.get("/api/card", async (c) => {
+      const query = new ApiQuery(c.req.query());
+      const game = query.id("game");
+      const product = query.id("product");
+      const index = await indexes.get(game);
 
-  /** Game, product and expansion ids are Cardmarket numbers. */
-  private static id(query: URLSearchParams, name: string): string {
-    const value = query.get(name) ?? "";
-    if (!/^\d{1,9}$/.test(value)) throw new BadRequest(`${name} must be a number`);
-    return value;
-  }
+      return c.json({ card: index.card(product) });
+    });
 
-  /** Optional whole number within bounds; undefined when absent or empty. */
-  private static integer(query: URLSearchParams, name: string, min: number, max: number): number | undefined {
-    const value = query.get(name);
-    if (!value) return undefined;
-    const number = Number(value);
-    if (!Number.isInteger(number) || number < min || number > max) throw new BadRequest(`${name} must be a whole number from ${min} to ${max}`);
-    return number;
-  }
+    app.get("/api/expansions", async (c) => {
+      const game = new ApiQuery(c.req.query()).id("game");
+      const index = await indexes.get(game);
 
-  /** Optional price in euros; undefined when absent or empty. */
-  private static price(query: URLSearchParams, name: string): number | undefined {
-    const value = query.get(name);
-    if (!value) return undefined;
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < 0) throw new BadRequest(`${name} must be a price in euros`);
-    return number;
+      return c.json({ expansions: index.expansions });
+    });
+
+    app.get("/api/latest", async (c) => {
+      const game = new ApiQuery(c.req.query()).id("game");
+      const day = await catalog.latestDay(game);
+
+      return c.json({ day });
+    });
+
+    app.get("/api/prices", async (c) => {
+      const query = new ApiQuery(c.req.query());
+      const game = query.id("game");
+      const product = query.id("product");
+      const prices = await catalog.latestPrices(game, product);
+
+      return c.json({ prices });
+    });
+
+    app.get("/api/daily", async (c) => {
+      const query = new ApiQuery(c.req.query());
+      const game = query.id("game");
+      const product = query.id("product");
+      const days = query.days();
+      const prices = await catalog.dailyPrices(game, product, days);
+
+      return c.json({ days: prices });
+    });
+
+    // The card's image, or 404 when it has none.
+    app.get("/api/image", async (c) => {
+      const query = new ApiQuery(c.req.query());
+      const game = query.id("game");
+      const product = query.id("product");
+      const size = query.imageSize();
+      const index = await indexes.get(game);
+      const card = index.card(product);
+      const image = card ? await images.get(game, card, size) : null;
+
+      if (!image) {
+        return c.json({ error: "No image" }, 404);
+      }
+
+      const cacheControl = `max-age=${WebServer.imageCacheSeconds}`;
+
+      return c.body(image.bytes, 200, { "content-type": image.type, "cache-control": cacheControl });
+    });
+
+    app.notFound((c) => c.json({ error: "Not found" }, 404));
+
+    // A refused parameter tells why; any other failure is logged and hidden behind a 500.
+    app.onError((error, c) => {
+      if (error instanceof HTTPException) {
+        return c.json({ error: error.message }, error.status);
+      }
+
+      logger.warn(`${c.req.path} failed: ${error.message}`);
+
+      return c.json({ error: "The server could not answer" }, 500);
+    });
+
+    return app;
   }
 
   /** Chart.js's browser build, from the installed package (its exports only expose the module builds). */
   private static chartJsPath(): string {
-    return join(dirname(fileURLToPath(import.meta.resolve("chart.js"))), "chart.umd.min.js");
+    const moduleEntry = fileURLToPath(import.meta.resolve("chart.js"));
+
+    return join(dirname(moduleEntry), "chart.umd.min.js");
   }
 }

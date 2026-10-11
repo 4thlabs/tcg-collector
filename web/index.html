@@ -1,115 +1,117 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Card prices</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="vendor/chart.js" defer></script>
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>Card prices</h1>
-        <p class="sub">Cardmarket prices archived every day by tcg-collector. <span id="latest"></span></p>
-      </div>
-      <div class="seg" role="group" aria-label="Game" id="game">
-        <button type="button" data-game="1" aria-pressed="true">Magic</button>
-        <button type="button" data-game="21" aria-pressed="false">Star Wars Unlimited</button>
-      </div>
-    </header>
-
-    <form class="filters" id="filters" role="search">
-      <label class="field grow">
-        <span>Name</span>
-        <input type="search" name="q" placeholder="e.g. sol ring, jace mind" autocomplete="off">
-      </label>
-      <label class="field grow">
-        <span>Expansion</span>
-        <select name="expansion"><option value="">All expansions</option></select>
-      </label>
-      <label class="field">
-        <span>Type</span>
-        <select name="kind">
-          <option value="all">All products</option>
-          <option value="single">Single cards</option>
-          <option value="sealed">Sealed products</option>
-        </select>
-      </label>
-      <label class="field price">
-        <span>Trend from (€)</span>
-        <input type="number" name="min" min="0" step="0.01" inputmode="decimal">
-      </label>
-      <label class="field price">
-        <span>to (€)</span>
-        <input type="number" name="max" min="0" step="0.01" inputmode="decimal">
-      </label>
-      <label class="field">
-        <span>Sort</span>
-        <select name="sort">
-          <option value="relevance">Best match</option>
-          <option value="trend-desc">Trend, highest first</option>
-          <option value="trend-asc">Trend, lowest first</option>
-          <option value="newest">Newest first</option>
-        </select>
-      </label>
-    </form>
-
-    <p class="summary" id="summary" aria-live="polite"></p>
-    <ul class="cards" id="cards"></ul>
-    <button type="button" class="more" id="more" hidden>Show more</button>
-  </div>
-
-  <template id="card-template">
-    <li>
-      <button type="button" class="card">
-        <span class="thumb"></span>
-        <span class="info">
-          <span class="name"></span>
-          <span class="expansion"></span>
-          <span class="prices">
-            <span class="trend"></span>
-            <span class="low"></span>
-          </span>
-        </span>
-      </button>
-    </li>
-  </template>
-
-  <dialog id="sheet" aria-labelledby="sheet-name">
-    <div class="sheet">
-      <button type="button" class="close" aria-label="Close">×</button>
-      <figure class="art" hidden></figure>
-      <div class="facts">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card prices</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="vendor/chart.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
         <div>
-          <h2 id="sheet-name" class="card-name"></h2>
-          <div class="meta">
-            <span class="card-game"></span>
-            <span>idProduct <code class="card-id"></code></span>
-            <span class="card-expansion"></span>
-            <span class="card-added"></span>
-            <a class="card-link" target="_blank" rel="noopener noreferrer">Open on Cardmarket</a>
-          </div>
+          <h1>Card prices</h1>
+          <p class="sub">Cardmarket prices archived every day by tcg-collector. <span id="latest"></span></p>
         </div>
-        <div class="tiles"></div>
-        <div class="asof"></div>
-      </div>
-      <div class="chart-area">
-        <div class="chart-head">
-          <h3>Daily prices (a day without a price guide keeps the previous price)</h3>
-          <div class="seg range" role="group" aria-label="Period">
-            <button type="button" data-days="30">30 d</button>
-            <button type="button" data-days="90">90 d</button>
-            <button type="button" data-days="365">1 y</button>
-            <button type="button" data-days="3650">All</button>
-          </div>
+        <div class="seg" role="group" aria-label="Game" id="game">
+          <button type="button" data-game="1" aria-pressed="true">Magic</button>
+          <button type="button" data-game="21" aria-pressed="false">Star Wars Unlimited</button>
         </div>
-        <div class="chart-box"><canvas aria-label="Daily prices chart"></canvas></div>
-        <div class="chart-note"></div>
-      </div>
+      </header>
+
+      <form class="filters" id="filters" role="search">
+        <label class="field grow">
+          <span>Name</span>
+          <input type="search" name="q" placeholder="e.g. sol ring, jace mind" autocomplete="off" />
+        </label>
+        <label class="field grow">
+          <span>Expansion</span>
+          <select name="expansion">
+            <option value="">All expansions</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Type</span>
+          <select name="kind">
+            <option value="all">All products</option>
+            <option value="single">Single cards</option>
+            <option value="sealed">Sealed products</option>
+          </select>
+        </label>
+        <label class="field price">
+          <span>Trend from (€)</span>
+          <input type="number" name="min" min="0" step="0.01" inputmode="decimal" />
+        </label>
+        <label class="field price">
+          <span>to (€)</span>
+          <input type="number" name="max" min="0" step="0.01" inputmode="decimal" />
+        </label>
+        <label class="field">
+          <span>Sort</span>
+          <select name="sort">
+            <option value="relevance">Best match</option>
+            <option value="trend-desc">Trend, highest first</option>
+            <option value="trend-asc">Trend, lowest first</option>
+            <option value="newest">Newest first</option>
+          </select>
+        </label>
+      </form>
+
+      <p class="summary" id="summary" aria-live="polite"></p>
+      <ul class="cards" id="cards"></ul>
+      <button type="button" class="more" id="more" hidden>Show more</button>
     </div>
-  </dialog>
-</body>
+
+    <template id="card-template">
+      <li>
+        <button type="button" class="card">
+          <span class="thumb"></span>
+          <span class="info">
+            <span class="name"></span>
+            <span class="expansion"></span>
+            <span class="prices">
+              <span class="trend"></span>
+              <span class="low"></span>
+            </span>
+          </span>
+        </button>
+      </li>
+    </template>
+
+    <dialog id="sheet" aria-labelledby="sheet-name">
+      <div class="sheet">
+        <button type="button" class="close" aria-label="Close">×</button>
+        <figure class="art" hidden></figure>
+        <div class="facts">
+          <div>
+            <h2 id="sheet-name" class="card-name"></h2>
+            <div class="meta">
+              <span class="card-game"></span>
+              <span>idProduct <code class="card-id"></code></span>
+              <span class="card-expansion"></span>
+              <span class="card-added"></span>
+              <a class="card-link" target="_blank" rel="noopener noreferrer">Open on Cardmarket</a>
+            </div>
+          </div>
+          <div class="tiles"></div>
+          <div class="asof"></div>
+        </div>
+        <div class="chart-area">
+          <div class="chart-head">
+            <h3>Daily prices (a day without a price guide keeps the previous price)</h3>
+            <div class="seg range" role="group" aria-label="Period">
+              <button type="button" data-days="30">30 d</button>
+              <button type="button" data-days="90">90 d</button>
+              <button type="button" data-days="365">1 y</button>
+              <button type="button" data-days="3650">All</button>
+            </div>
+          </div>
+          <div class="chart-box"><canvas aria-label="Daily prices chart"></canvas></div>
+          <div class="chart-note"></div>
+        </div>
+      </div>
+    </dialog>
+  </body>
 </html>

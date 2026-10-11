@@ -4,6 +4,7 @@ import { GameSelection } from "../src/collect/game-selection.ts";
 
 test('"all" covers ids 1 to 40', () => {
   const ids = GameSelection.parse("all").ids;
+
   assert.equal(ids.length, GameSelection.defaultMaxGameId);
   assert.equal(ids[0], 1);
 });

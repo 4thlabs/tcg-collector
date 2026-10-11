@@ -26,24 +26,40 @@ export class ScheduleCommand {
   }
 
   register(program: Command): void {
+    const defaultTime = process.env.COLLECT_AT ?? ScheduleCommand.defaultTime;
+    const defaultGames = process.env.GAMES ?? "all";
+
     program
       .command("schedule")
       .description("collect every day at a fixed time (UTC), without stopping")
-      .option("-a, --at <HH:MM>", "collection time, in UTC", process.env.COLLECT_AT ?? ScheduleCommand.defaultTime)
-      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
-      .option("--import-games <ids>", "games to import into InfluxDB after each collection (default: the collected games)", process.env.IMPORT_GAMES)
+      .option("-a, --at <HH:MM>", "collection time, in UTC", defaultTime)
+      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', defaultGames)
+      .option(
+        "--import-games <ids>",
+        "games to import into InfluxDB after each collection (default: the collected games)",
+        process.env.IMPORT_GAMES,
+      )
       .option("--run-now", "also run a collection immediately on start", false)
       .action(async (options: ScheduleOptions) => {
         const app = this.app();
         const games = GameSelection.parse(options.games);
         const importGames = options.importGames ? GameSelection.parse(options.importGames) : games;
         const collect = async () => {
-          const report = await (await app.createCollector()).collect(games);
+          const collector = await app.createCollector();
+          const report = await collector.collect(games);
+
           app.logger.info(report.summary());
-          if (app.influxConfigured) await app.withImporter((importer) => importer.import(importGames));
+          if (app.influxConfigured) {
+            await app.withImporter((importer) => importer.import(importGames));
+          }
         };
+
         const scheduler = new DailyScheduler(options.at, collect, app.logger);
-        if (options.runNow) await scheduler.runOnce();
+
+        if (options.runNow) {
+          await scheduler.runOnce();
+        }
+
         await scheduler.runForever();
       });
   }

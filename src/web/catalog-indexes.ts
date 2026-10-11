@@ -1,4 +1,5 @@
 // Keeps one search index per game in memory, built on first use and rebuilt in the background once it is old.
+import { ErrorMessage } from "../logging/error-message.ts";
 import type { Logger } from "../logging/logger-factory.ts";
 import type { CardCatalog } from "./card-catalog.ts";
 import { CatalogIndex } from "./catalog-index.ts";
@@ -24,34 +25,58 @@ export class CatalogIndexes {
     this.now = now;
   }
 
-  /** Index of a game. An old index keeps answering while the new one builds; a failed first build is retried on the next call. */
+  /** Index of a game: built on the first call, then rebuilt in the background once it is old. */
   get(game: string): Promise<CatalogIndex> {
     const entry = this.entries.get(game);
+
     if (!entry) {
-      const index = this.build(game);
-      this.entries.set(game, { index, since: this.now() });
-      index.catch(() => this.entries.delete(game));
-      return index;
+      return this.buildFirst(game);
     }
-    if (this.now() - entry.since > CatalogIndexes.maxAgeMs) {
-      entry.since = this.now();
-      this.build(game).then(
-        (index) => this.entries.set(game, { index: Promise.resolve(index), since: this.now() }),
-        () => undefined, // already logged; the old index stays until the next attempt
-      );
+
+    const ageMs = this.now() - entry.since;
+
+    if (ageMs > CatalogIndexes.maxAgeMs) {
+      this.rebuildInBackground(game, entry);
     }
+
     return entry.index;
+  }
+
+  /** A failed first build is forgotten, so the next call tries again. */
+  private buildFirst(game: string): Promise<CatalogIndex> {
+    const index = this.build(game);
+
+    this.entries.set(game, { index, since: this.now() });
+    index.catch(() => this.entries.delete(game));
+
+    return index;
+  }
+
+  /** The old index keeps answering until the new one is ready, and stays until the next attempt on failure. */
+  private rebuildInBackground(game: string, entry: Entry): void {
+    // Moving "since" now keeps the calls made during the rebuild from starting another one.
+    entry.since = this.now();
+    this.build(game).then(
+      (index) => this.entries.set(game, { index: Promise.resolve(index), since: this.now() }),
+      () => undefined, // already logged by build()
+    );
   }
 
   private async build(game: string): Promise<CatalogIndex> {
     const started = this.now();
+
     try {
       const [products, trends] = await Promise.all([this.catalog.products(game), this.catalog.latestTrends(game)]);
       const index = new CatalogIndex(products, trends);
-      this.logger.info(`search index of game ${game}: ${index.size} products in ${this.now() - started} ms`);
+      const durationMs = this.now() - started;
+
+      this.logger.info(`search index of game ${game}: ${index.size} products in ${durationMs} ms`);
+
       return index;
     } catch (error) {
-      this.logger.warn(`search index of game ${game} failed: ${error instanceof Error ? error.message : String(error)}`);
+      const message = ErrorMessage.of(error);
+
+      this.logger.warn(`search index of game ${game} failed: ${message}`);
       throw error;
     }
   }

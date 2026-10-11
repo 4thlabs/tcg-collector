@@ -10,8 +10,18 @@ export class ContentFingerprint {
   private static readonly volatileFields = ["createdAt"];
 
   static of(body: Buffer): string {
-    const json = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-    for (const field of ContentFingerprint.volatileFields) delete json[field];
-    return createHash("sha256").update(JSON.stringify(json)).digest("hex");
+    const text = body.toString("utf8");
+    const content = JSON.parse(text) as Record<string, unknown>;
+
+    for (const field of ContentFingerprint.volatileFields) {
+      delete content[field];
+    }
+
+    const canonical = JSON.stringify(content);
+    const hash = createHash("sha256");
+
+    hash.update(canonical);
+
+    return hash.digest("hex");
   }
 }

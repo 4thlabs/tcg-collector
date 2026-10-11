@@ -27,26 +27,38 @@ export class CollectReport {
   }
 
   count(outcome: Outcome): number {
-    return this.results.filter((r) => r.outcome === outcome).length;
+    return this.withOutcome(outcome).length;
   }
 
   get failures(): readonly FileResult[] {
-    return this.results.filter((r) => r.outcome === "failed");
+    return this.withOutcome("failed");
   }
 
   get archivedBytes(): number {
-    return this.results.filter((r) => r.outcome === "archived").reduce((sum, r) => sum + r.bytes, 0);
+    let total = 0;
+
+    for (const result of this.withOutcome("archived")) {
+      total += result.bytes;
+    }
+
+    return total;
   }
 
   /** One line, so it stays a single entry in JSON logs; each failure is already logged on its own. */
   summary(): string {
     const seconds = Math.round((Date.now() - this.startedAt) / 1000);
+    const megabytes = (this.archivedBytes / 1e6).toFixed(1);
+
     return [
-      `Collection finished in ${seconds} s: ${this.count("archived")} archived (${(this.archivedBytes / 1e6).toFixed(1)} MB compressed)`,
+      `Collection finished in ${seconds} s: ${this.count("archived")} archived (${megabytes} MB compressed)`,
       `${this.count("unchanged")} unchanged (same ETag)`,
       `${this.count("same-content")} regenerated without changes`,
       `${this.count("absent")} absent`,
       `${this.count("failed")} failed`,
     ].join(", ");
+  }
+
+  private withOutcome(outcome: Outcome): FileResult[] {
+    return this.results.filter((result) => result.outcome === outcome);
   }
 }

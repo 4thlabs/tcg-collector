@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: Typecheck and tests (Node ${{ matrix.node }})
+    name: Typecheck, lint, format and tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,6 +24,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm test
 
   image:

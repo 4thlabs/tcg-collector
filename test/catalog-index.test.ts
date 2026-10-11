@@ -3,10 +3,25 @@ import { test } from "node:test";
 import type { ProductRecord, TrendRecord } from "../src/web/card-catalog.ts";
 import { CatalogIndex, type SearchRequest } from "../src/web/catalog-index.ts";
 
-const product = (id: string, name: string, expansionId: number, category = "Magic Single", added = "2026-01-01"): ProductRecord => ({
-  product: id, name, category, expansionId, added,
+const product = (
+  id: string,
+  name: string,
+  expansionId: number,
+  category = "Magic Single",
+  added = "2026-01-01",
+): ProductRecord => ({
+  product: id,
+  name,
+  category,
+  expansionId,
+  added,
 });
-const trend = (id: string, value: number | null): TrendRecord => ({ product: id, trend: value, low: value, trendFoil: null });
+const trend = (id: string, value: number | null): TrendRecord => ({
+  product: id,
+  trend: value,
+  low: value,
+  trendFoil: null,
+});
 
 const index = new CatalogIndex(
   [
@@ -20,21 +35,36 @@ const index = new CatalogIndex(
     product("3", "Sol Talisman", 3),
     product("4", 'Commander: Foundations: ""Elves""', 6572, "Magic Theme Deck Display"),
   ],
-  [trend("906534", 12), trend("906535", 30), trend("910771", 1.24), trend("15451", 900), trend("2", 15), trend("1", 4000)],
+  [
+    trend("906534", 12),
+    trend("906535", 30),
+    trend("910771", 1.24),
+    trend("15451", 900),
+    trend("2", 15),
+    trend("1", 4000),
+  ],
 );
 
 const find = (request: Partial<SearchRequest>) =>
-  index.find({ text: "", kind: "all", sort: "relevance", offset: 0, limit: 50, ...request }).cards.map((card) => card.product);
+  index
+    .find({ text: "", kind: "all", sort: "relevance", offset: 0, limit: 50, ...request })
+    .cards.map((card) => card.product);
 
 test("numbers the versions of one name in one expansion by idProduct", () => {
-  assert.deepEqual(["906534", "906535", "906536", "910771"].map((id) => index.card(id)?.version), [1, 2, 3, null]);
+  assert.deepEqual(
+    ["906534", "906535", "906536", "910771"].map((id) => index.card(id)?.version),
+    [1, 2, 3, null],
+  );
 });
 
 test("names expansions after their sealed products", () => {
   assert.equal(index.card("910771")?.expansion, "Commander: Foundations");
   assert.equal(index.card("15451")?.expansion, "Alpha");
   assert.equal(index.card("906534")?.expansion, null);
-  assert.deepEqual(index.expansions.map((expansion) => expansion.label), ["Commander: Foundations", "Alpha"]);
+  assert.deepEqual(
+    index.expansions.map((expansion) => expansion.label),
+    ["Commander: Foundations", "Alpha"],
+  );
 });
 
 test("finds words in any order, as prefixes, best match then newest", () => {
@@ -57,6 +87,10 @@ test("filters by expansion, type and trend price", () => {
 test("sorts by trend with unpriced products last, and pages", () => {
   assert.deepEqual(find({ text: "sol ring", sort: "trend-asc" }), ["910771", "906534", "906535", "15451", "906536"]);
   const page = index.find({ text: "sol ring", kind: "all", sort: "trend-desc", offset: 1, limit: 2 });
+
   assert.equal(page.total, 5);
-  assert.deepEqual(page.cards.map((card) => card.product), ["906535", "906534"]);
+  assert.deepEqual(
+    page.cards.map((card) => card.product),
+    ["906535", "906534"],
+  );
 });

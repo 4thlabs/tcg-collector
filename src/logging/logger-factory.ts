@@ -12,9 +12,12 @@ export class LoggerFactory {
     if (!(LoggerFactory.levels as readonly string[]).includes(level)) {
       throw new Error(`Invalid log level: "${level}" (expected: ${LoggerFactory.levels.join(", ")})`);
     }
+
+    const lineFormat = format === "json" ? winston.format.json() : LoggerFactory.textFormat();
+
     return winston.createLogger({
       level,
-      format: winston.format.combine(winston.format.timestamp(), format === "json" ? winston.format.json() : LoggerFactory.textFormat()),
+      format: winston.format.combine(winston.format.timestamp(), lineFormat),
       transports: [new winston.transports.Console()],
     });
   }
@@ -26,6 +29,8 @@ export class LoggerFactory {
 
   /** "2026-09-29T12:00:03.123Z info  archived price_guide_21 (0.15 MB)" */
   private static textFormat(): winston.Logform.Format {
-    return winston.format.printf(({ timestamp, level, message }) => `${String(timestamp)} ${level.padEnd(5)} ${String(message)}`);
+    return winston.format.printf(({ timestamp, level, message }) => {
+      return `${String(timestamp)} ${level.padEnd(5)} ${String(message)}`;
+    });
   }
 }

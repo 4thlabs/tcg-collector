@@ -11,15 +11,22 @@ export class CollectCommand {
   }
 
   register(program: Command): void {
+    const defaultGames = process.env.GAMES ?? "all";
+
     program
       .command("collect")
       .description("collect the files of the requested games once")
-      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', process.env.GAMES ?? "all")
+      .option("-g, --games <ids>", 'games to collect: "all" or a list such as "1,6,21"', defaultGames)
       .action(async (options: { games: string }) => {
         const app = this.app();
-        const report = await (await app.createCollector()).collect(GameSelection.parse(options.games));
+        const games = GameSelection.parse(options.games);
+        const collector = await app.createCollector();
+        const report = await collector.collect(games);
+
         app.logger.info(report.summary());
-        if (report.failures.length > 0) process.exitCode = 1;
+        if (report.failures.length > 0) {
+          process.exitCode = 1;
+        }
       });
   }
 }

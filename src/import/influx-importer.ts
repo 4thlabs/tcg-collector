@@ -1,4 +1,5 @@
-// Import: writes the archived catalogues and price guides into InfluxDB, day by day, skipping the days already imported.
+// Import: writes the archived catalogues and price guides into InfluxDB, day by day,
+// skipping the days already imported.
 import type { Point } from "@influxdata/influxdb3-client";
 import type { PriceGuideContent, ProductEntry, ProductListContent } from "../cardmarket/feed-content.ts";
 import { FeedFile, FeedKind } from "../cardmarket/feed-file.ts";
@@ -14,6 +15,9 @@ export interface ImportSummary {
   files: number;
   points: number;
 }
+
+/** The points of one archive day. */
+type DayPoints = [day: string, points: Point[]];
 
 /** Catalogues first, so the products of a day are there before its prices. */
 const importedKinds = [FeedKind.singles, FeedKind.nonSingles, FeedKind.priceGuide] as const;
@@ -42,36 +46,69 @@ export class InfluxImporter {
     for (const idGame of games.ids) {
       for (const kind of importedKinds) {
         const file = new FeedFile(kind, idGame);
-        const lastDay = replay ? undefined : this.ledger.lastDay(file.key);
-        const days = (await this.archive.days(file)).filter((day) => lastDay === undefined || day > lastDay);
-        if (days.length === 0) continue;
+        const imported = await this.importFile(file, replay);
 
-        const points = kind === FeedKind.priceGuide ? this.pricePoints(file, days) : this.productPoints(file, days, lastDay);
-        for await (const [day, dayPoints] of points) {
-          // The log entry goes last, with the day's points: an interrupted import resumes where it stopped.
-          await this.writer.write([...dayPoints, this.ledger.entry(file.key, file.idGame, day, dayPoints.length)]);
-          this.ledger.record(file.key, day);
-          summary.points += dayPoints.length;
-          summary.files++;
-          this.logger.info(`imported ${file.key} ${day} (${dayPoints.length} points)`);
-        }
+        summary.files += imported.files;
+        summary.points += imported.points;
       }
     }
 
     const seconds = Math.round((Date.now() - started) / 1000);
+
     this.logger.info(`Import finished in ${seconds} s: ${summary.files} files, ${summary.points} points`);
+
     return summary;
   }
 
+  /** Imports the archives of one file written after its last imported day, or all of them when replaying. */
+  private async importFile(file: FeedFile, replay: boolean): Promise<ImportSummary> {
+    const imported: ImportSummary = { files: 0, points: 0 };
+    const lastDay = replay ? undefined : this.ledger.lastDay(file.key);
+    const archivedDays = await this.archive.days(file);
+    const days = archivedDays.filter((day) => lastDay === undefined || day > lastDay);
+
+    if (days.length === 0) {
+      return imported;
+    }
+
+    for await (const [day, points] of this.pointsByDay(file, days, lastDay)) {
+      // The log entry goes last, with the day's points: an interrupted import resumes where it stopped.
+      const logEntry = this.ledger.entry(file.key, file.idGame, day, points.length);
+
+      await this.writer.write([...points, logEntry]);
+      this.ledger.record(file.key, day);
+      imported.files++;
+      imported.points += points.length;
+      this.logger.info(`imported ${file.key} ${day} (${points.length} points)`);
+    }
+
+    return imported;
+  }
+
+  private pointsByDay(file: FeedFile, days: readonly string[], lastDay: string | undefined): AsyncGenerator<DayPoints> {
+    if (file.kind === FeedKind.priceGuide) {
+      return this.pricePoints(file, days);
+    }
+
+    return this.productPoints(file, days, lastDay);
+  }
+
   /** One point per product with at least one price. */
-  private async *pricePoints(file: FeedFile, days: readonly string[]): AsyncGenerator<[string, Point[]]> {
+  private async *pricePoints(file: FeedFile, days: readonly string[]): AsyncGenerator<DayPoints> {
     for (const day of days) {
       const content = await this.archive.read<PriceGuideContent>(file, day);
       const points: Point[] = [];
+
       for (const entry of content.priceGuides) {
         const point = PricePointFactory.create(entry, file.idGame, day);
-        if (point) points.push(point);
+
+        if (!point) {
+          continue;
+        }
+
+        points.push(point);
       }
+
       yield [day, points];
     }
   }
@@ -80,22 +117,45 @@ export class InfluxImporter {
    * Only the products that are new or changed since the previous archive of the same catalogue
    * (the one of lastDay, already imported; none on a first import or a replay).
    */
-  private async *productPoints(file: FeedFile, days: readonly string[], lastDay: string | undefined): AsyncGenerator<[string, Point[]]> {
+  private async *productPoints(
+    file: FeedFile,
+    days: readonly string[],
+    lastDay: string | undefined,
+  ): AsyncGenerator<DayPoints> {
     let previous = new Map<number, ProductEntry>();
-    if (lastDay !== undefined) previous = InfluxImporter.byId((await this.archive.read<ProductListContent>(file, lastDay)).products);
+
+    if (lastDay !== undefined) {
+      previous = await this.productsOn(file, lastDay);
+    }
 
     for (const day of days) {
-      const current = InfluxImporter.byId((await this.archive.read<ProductListContent>(file, day)).products);
+      const current = await this.productsOn(file, day);
       const points: Point[] = [];
+
       for (const entry of current.values()) {
-        if (ProductPointFactory.changed(entry, previous.get(entry.idProduct))) points.push(ProductPointFactory.create(entry, file.idGame, day));
+        const before = previous.get(entry.idProduct);
+
+        if (!ProductPointFactory.changed(entry, before)) {
+          continue;
+        }
+
+        points.push(ProductPointFactory.create(entry, file.idGame, day));
       }
+
       previous = current;
       yield [day, points];
     }
   }
 
-  private static byId(products: readonly ProductEntry[]): Map<number, ProductEntry> {
-    return new Map(products.map((product) => [product.idProduct, product]));
+  /** The products of one catalogue archive, by idProduct. */
+  private async productsOn(file: FeedFile, day: string): Promise<Map<number, ProductEntry>> {
+    const content = await this.archive.read<ProductListContent>(file, day);
+    const products = new Map<number, ProductEntry>();
+
+    for (const product of content.products) {
+      products.set(product.idProduct, product);
+    }
+
+    return products;
   }
 }
