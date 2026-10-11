@@ -4,7 +4,22 @@ export class ExpansionLabel {
   private static readonly raritySet = /^(.*?):? (?:Rare|Common|Uncommon|Leader|Legendary|Base) Set$/i;
   /** Commander and starter decks: X: "Deck name" (quotes doubled in Cardmarket's files). */
   private static readonly deck = /^(.*?): ""/;
-  private static readonly packaging = /[: ]+(?:Foil Promo Pack|Promo Pack|Prerelease Promo|Booster Box|Booster Display|Booster|Display|Bundle|Prerelease Pack|Deck|Box)\b.*$/i;
+  /** Words that name the packaging, not the expansion. */
+  private static readonly packagingWords = [
+    "Foil Promo Pack",
+    "Promo Pack",
+    "Prerelease Promo",
+    "Booster Box",
+    "Booster Display",
+    "Booster",
+    "Display",
+    "Bundle",
+    "Prerelease Pack",
+    "Deck",
+    "Box",
+  ];
+  /** The packaging and everything after it: "Foundations Booster Box (English)" -> " Booster Box (English)". */
+  private static readonly packaging = new RegExp(`[: ]+(?:${ExpansionLabel.packagingWords.join("|")})\\b.*$`, "i");
 
   /**
    * Best guess from the names of an expansion's sealed products, in this order: "X: Full Set", "X Rare Set",
@@ -13,16 +28,39 @@ export class ExpansionLabel {
    */
   static fromSealedNames(names: readonly string[]): string | null {
     for (const pattern of [ExpansionLabel.fullSet, ExpansionLabel.raritySet]) {
-      const match = names.map((name) => pattern.exec(name)).find((m) => m !== null);
+      const match = ExpansionLabel.firstMatch(names, pattern);
       if (match) return ExpansionLabel.clean(match[1]);
     }
-    const decks = names.map((name) => ExpansionLabel.deck.exec(name)?.[1]).filter((prefix) => prefix !== undefined);
-    if (decks.length > 0) return ExpansionLabel.clean(ExpansionLabel.shortest(decks));
+
+    const deckPrefixes = ExpansionLabel.deckPrefixes(names);
+    if (deckPrefixes.length > 0) return ExpansionLabel.clean(ExpansionLabel.shortest(deckPrefixes));
+
     const shared = ExpansionLabel.sharedWords(names);
     if (shared.length >= 4) return shared;
+
     if (names.length === 0) return null;
     const shortest = ExpansionLabel.shortest(names);
-    return ExpansionLabel.clean(shortest.replace(ExpansionLabel.packaging, "")) || shortest;
+    const withoutPackaging = ExpansionLabel.clean(shortest.replace(ExpansionLabel.packaging, ""));
+    return withoutPackaging || shortest;
+  }
+
+  private static firstMatch(names: readonly string[], pattern: RegExp): RegExpExecArray | null {
+    for (const name of names) {
+      const match = pattern.exec(name);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  /** "X" for each deck named X: "Deck name". */
+  private static deckPrefixes(names: readonly string[]): string[] {
+    const prefixes: string[] = [];
+    for (const name of names) {
+      const match = ExpansionLabel.deck.exec(name);
+      if (!match) continue;
+      prefixes.push(match[1]);
+    }
+    return prefixes;
   }
 
   /** Leading words common to every name (at least two names), without a trailing separator. */
@@ -34,7 +72,8 @@ export class ExpansionLabel {
       if (others.some((words) => words[index] !== word)) break;
       shared.push(word);
     }
-    return ExpansionLabel.clean(shared.join(" ").replace(/[:\-–]$/, ""));
+    const withoutSeparator = shared.join(" ").replace(/[:\-–]$/, "");
+    return ExpansionLabel.clean(withoutSeparator);
   }
 
   private static shortest(names: readonly string[]): string {

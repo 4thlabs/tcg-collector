@@ -33,8 +33,9 @@ export class SnapshotArchive {
     const path = this.pathOf(file, day);
     const compressed = await gzipAsync(body, { level: constants.Z_BEST_COMPRESSION });
     await mkdir(this.folderOf(file), { recursive: true });
-    await writeFile(`${path}.tmp`, compressed);
-    await rename(`${path}.tmp`, path);
+    const temporary = `${path}.tmp`;
+    await writeFile(temporary, compressed);
+    await rename(temporary, path);
     return { path, compressedSize: compressed.length };
   }
 
@@ -42,7 +43,9 @@ export class SnapshotArchive {
   async days(file: FeedFile): Promise<string[]> {
     try {
       const names = await readdir(this.folderOf(file));
-      return names.filter((name) => SnapshotArchive.archiveName.test(name)).map((name) => name.slice(0, 10)).sort();
+      const archives = names.filter((name) => SnapshotArchive.archiveName.test(name));
+      const days = archives.map((name) => name.slice(0, 10));
+      return days.sort();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
@@ -51,8 +54,10 @@ export class SnapshotArchive {
 
   /** Decompressed and parsed content of one archive. */
   async read<T>(file: FeedFile, day: string): Promise<T> {
-    const body = await gunzipAsync(await readFile(this.pathOf(file, day)));
-    return JSON.parse(body.toString("utf8")) as T;
+    const compressed = await readFile(this.pathOf(file, day));
+    const body = await gunzipAsync(compressed);
+    const text = body.toString("utf8");
+    return JSON.parse(text) as T;
   }
 
   /** Folder of a file's archives: <root>/<type>/<game> */

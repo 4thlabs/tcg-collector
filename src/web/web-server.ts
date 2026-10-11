@@ -71,7 +71,10 @@ export class WebServer {
     });
 
     for (const [path, file] of this.files) {
-      app.get(path, async (c) => c.body(await readFile(file.path), 200, { "content-type": file.type, "cache-control": "no-cache" }));
+      app.get(path, async (c) => {
+        const bytes = await readFile(file.path);
+        return c.body(bytes, 200, { "content-type": file.type, "cache-control": "no-cache" });
+      });
     }
 
     // API answers change with every import: never cached. The image route sets its own header.
@@ -84,31 +87,36 @@ export class WebServer {
       const query = new ApiQuery(c.req.query());
       const game = query.id("game");
       const search = query.search();
-      return c.json((await indexes.get(game)).find(search));
+      const index = await indexes.get(game);
+      return c.json(index.find(search));
     });
 
     app.get("/api/card", async (c) => {
       const query = new ApiQuery(c.req.query());
       const game = query.id("game");
       const product = query.id("product");
-      return c.json({ card: (await indexes.get(game)).card(product) });
+      const index = await indexes.get(game);
+      return c.json({ card: index.card(product) });
     });
 
     app.get("/api/expansions", async (c) => {
       const game = new ApiQuery(c.req.query()).id("game");
-      return c.json({ expansions: (await indexes.get(game)).expansions });
+      const index = await indexes.get(game);
+      return c.json({ expansions: index.expansions });
     });
 
     app.get("/api/latest", async (c) => {
       const game = new ApiQuery(c.req.query()).id("game");
-      return c.json({ day: await catalog.latestDay(game) });
+      const day = await catalog.latestDay(game);
+      return c.json({ day });
     });
 
     app.get("/api/prices", async (c) => {
       const query = new ApiQuery(c.req.query());
       const game = query.id("game");
       const product = query.id("product");
-      return c.json({ prices: await catalog.latestPrices(game, product) });
+      const prices = await catalog.latestPrices(game, product);
+      return c.json({ prices });
     });
 
     app.get("/api/daily", async (c) => {
@@ -116,7 +124,8 @@ export class WebServer {
       const game = query.id("game");
       const product = query.id("product");
       const days = query.days();
-      return c.json({ days: await catalog.dailyPrices(game, product, days) });
+      const prices = await catalog.dailyPrices(game, product, days);
+      return c.json({ days: prices });
     });
 
     // The card's image, or 404 when it has none.
@@ -125,10 +134,12 @@ export class WebServer {
       const game = query.id("game");
       const product = query.id("product");
       const size = query.imageSize();
-      const card = (await indexes.get(game)).card(product);
+      const index = await indexes.get(game);
+      const card = index.card(product);
       const image = card ? await images.get(game, card, size) : null;
       if (!image) return c.json({ error: "No image" }, 404);
-      return c.body(image.bytes, 200, { "content-type": image.type, "cache-control": `max-age=${WebServer.imageCacheSeconds}` });
+      const cacheControl = `max-age=${WebServer.imageCacheSeconds}`;
+      return c.body(image.bytes, 200, { "content-type": image.type, "cache-control": cacheControl });
     });
 
     app.notFound((c) => c.json({ error: "Not found" }, 404));

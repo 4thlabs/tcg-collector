@@ -60,7 +60,10 @@ export class App {
     }
   }
 
-  /** Web server of the card page, reading InfluxDB for as long as the process runs; card images are cached in data/images. */
+  /**
+   * Web server of the card page, reading InfluxDB for as long as the process runs.
+   * Card images are cached in data/images.
+   */
   createWebServer(): WebServer {
     const catalog = new CardCatalog(new InfluxReader(this.influxSettings()));
     const http = new PoliteHttp();

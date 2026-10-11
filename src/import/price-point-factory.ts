@@ -36,8 +36,9 @@ export class PricePointFactory {
 
     let empty = true;
     for (const [key, field] of PricePointFactory.fields) {
-      const value = entry[key] as number | null | undefined;
-      if (value === null || value === undefined || !Number.isFinite(value)) continue;
+      const value = entry[key];
+      // Cardmarket leaves a price empty (null or missing) when it has no value.
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
       point.setFloatField(field, value);
       empty = false;
     }

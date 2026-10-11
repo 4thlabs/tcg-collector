@@ -26,7 +26,9 @@ export class GamesCommand {
           const sizes = await GamesCommand.fileSizes(client, idGame);
           // A game id without any file is not a published game.
           if (sizes.every((size) => size === undefined)) continue;
-          for (const size of sizes) total += size ?? 0;
+          for (const size of sizes) {
+            total += size ?? 0;
+          }
           console.log([idGame, ...sizes.map(GamesCommand.megabytes)].join("\t"));
         }
         console.log(`Uncompressed total: ${GamesCommand.megabytes(total)}`);

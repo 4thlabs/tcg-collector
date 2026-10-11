@@ -23,20 +23,48 @@ class Cli {
   private readonly program = new Command();
 
   constructor() {
+    // Each option falls back to its environment variable, then to a default.
+    const defaults = {
+      dataDir: process.env.DATA_DIR ?? "data",
+      baseUrl: process.env.CARDMARKET_BASE_URL ?? CardmarketClient.defaultBaseUrl,
+      influxUrl: process.env.INFLUX_URL,
+      influxDatabase: process.env.INFLUX_DATABASE ?? "cardmarket",
+      logLevel: process.env.LOG_LEVEL ?? "info",
+      logFormat: process.env.LOG_FORMAT ?? "text",
+    };
+    const logLevel = new Option("--log-level <level>", "log level")
+      .choices(LoggerFactory.levels)
+      .default(defaults.logLevel);
+    const logFormat = new Option("--log-format <format>", "log format")
+      .choices(["text", "json"])
+      .default(defaults.logFormat);
+
     this.program
       .name("tcg-collector")
       .description("Daily collection of Cardmarket's public files (price guide and catalogues)")
-      .option("-d, --data-dir <folder>", "folder for the archives and the ledger", process.env.DATA_DIR ?? "data")
-      .option("--base-url <url>", "base URL of the Cardmarket files", process.env.CARDMARKET_BASE_URL ?? CardmarketClient.defaultBaseUrl)
-      .option("--influx-url <url>", "InfluxDB 3 URL, e.g. http://localhost:8181 (token: INFLUX_TOKEN)", process.env.INFLUX_URL)
-      .option("--influx-database <name>", "InfluxDB database", process.env.INFLUX_DATABASE ?? "cardmarket")
-      .addOption(new Option("--log-level <level>", "log level").choices(LoggerFactory.levels).default(process.env.LOG_LEVEL ?? "info"))
-      .addOption(new Option("--log-format <format>", "log format").choices(["text", "json"]).default(process.env.LOG_FORMAT ?? "text"));
+      .option("-d, --data-dir <folder>", "folder for the archives and the ledger", defaults.dataDir)
+      .option("--base-url <url>", "base URL of the Cardmarket files", defaults.baseUrl)
+      .option(
+        "--influx-url <url>",
+        "InfluxDB 3 URL, e.g. http://localhost:8181 (token: INFLUX_TOKEN)",
+        defaults.influxUrl,
+      )
+      .option("--influx-database <name>", "InfluxDB database", defaults.influxDatabase)
+      .addOption(logLevel)
+      .addOption(logFormat);
 
     // Commands read the global options when they run, after the command line has been parsed.
     const app = () => new App(this.program.opts<GlobalOptions>());
-    const commands = [new CollectCommand(app), new ScheduleCommand(app), new ImportCommand(app), new ServeCommand(app), new GamesCommand(app)];
-    for (const command of commands) command.register(this.program);
+    const commands = [
+      new CollectCommand(app),
+      new ScheduleCommand(app),
+      new ImportCommand(app),
+      new ServeCommand(app),
+      new GamesCommand(app),
+    ];
+    for (const command of commands) {
+      command.register(this.program);
+    }
   }
 
   async run(argv: readonly string[]): Promise<void> {

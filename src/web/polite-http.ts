@@ -32,6 +32,8 @@ export class PoliteHttp {
     const now = Date.now();
     const start = Math.max(now, this.nextSlot);
     this.nextSlot = start + this.spacingMs;
-    if (start > now) await new Promise((resolve) => setTimeout(resolve, start - now));
+    if (start > now) {
+      await new Promise((resolve) => setTimeout(resolve, start - now));
+    }
   }
 }

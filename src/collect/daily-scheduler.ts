@@ -19,8 +19,12 @@ export class DailyScheduler {
 
   /** Next run strictly after "now". */
   nextRun(now: Date): Date {
-    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), this.hour, this.minute));
-    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const todayAtTime = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), this.hour, this.minute);
+    const next = new Date(todayAtTime);
+    // Today's time has passed: tomorrow at the same time.
+    if (next.getTime() <= now.getTime()) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
     return next;
   }
 
@@ -29,7 +33,8 @@ export class DailyScheduler {
     for (;;) {
       const next = this.nextRun(new Date());
       this.logger.info(`Next collection: ${next.toISOString()}`);
-      await new Promise((resolve) => setTimeout(resolve, next.getTime() - Date.now()));
+      const waitMs = next.getTime() - Date.now();
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
       await this.runOnce();
     }
   }

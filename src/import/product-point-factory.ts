@@ -6,7 +6,8 @@ import { InfluxDay } from "../influx/influx-day.ts";
 /**
  * Table "product": one point per product each time it appears or changes in a catalogue
  * (timestamp: the catalogue archive day at 00:00 UTC). The latest point of a product is its current description.
- * Tags: game, product. Fields: name, category (e.g. "Magic Single"), date_added, id_category, id_expansion, id_metacard.
+ * Tags: game, product.
+ * Fields: name, category (e.g. "Magic Single"), date_added, id_category, id_expansion, id_metacard.
  */
 export class ProductPointFactory {
   static readonly table = "product";

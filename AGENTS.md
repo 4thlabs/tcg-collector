@@ -38,6 +38,38 @@ Both must pass. CI runs them on Node 22.18 and 24.
 - Prefer a few explicit lines over a dense one-liner. A temporary variable with a good name is cheaper than a reader's minute.
 - No abstraction for a single use, no options nobody passes, no code "for later".
 
+**One step per line**
+
+A line does one thing. When a line parses *and* casts *and* filters, or hashes *and* formats, split it and name each intermediate value: the names are the explanation.
+
+```ts
+// Avoid
+const json = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
+for (const field of volatileFields) delete json[field];
+return createHash("sha256").update(JSON.stringify(json)).digest("hex");
+
+// Prefer
+const text = body.toString("utf8");
+const content = JSON.parse(text) as Record<string, unknown>;
+for (const field of volatileFields) {
+  delete content[field];
+}
+const canonical = JSON.stringify(content);
+const hash = createHash("sha256");
+hash.update(canonical);
+return hash.digest("hex");
+```
+
+- No call that does real work inside another call's arguments: name its result first. Trivial conversions (`String(id)`, `Number(value)`) may stay inline.
+- Loops always have braces, with the body on its own lines.
+- An `if` stays on one line only as a guard: `if (!card) return null;` (also `throw`, `continue`, `break`). Any other `if` / `else` has braces.
+- No nested ternaries, and no ternary inside a template literal: use `if` and a named value.
+- One fallback per expression: not `a ?? b ?? c`, nor `x?.y ?? (cond ? d : e)`.
+- Array chains of more than two steps (`filter`, `map`, `sort`…) go one step per line, or become a `for` loop. Prefer a loop to `reduce`.
+- A callback longer than one short expression becomes a named function or method.
+- A builder or fluent chain (InfluxDB `Point`, Commander, Hono) is written one call per line.
+- Lines are at most 120 characters, comments included.
+
 **Comments**
 
 - Every source file starts with a one-line comment saying what the file is for.

@@ -1,4 +1,5 @@
-// serve: web page to search a card and see its prices, read from InfluxDB (mode used by the tcg-collector-web container).
+// serve: web page to search a card and see its prices, read from InfluxDB.
+// Mode used by the tcg-collector-web container.
 import { Command } from "commander";
 import type { App } from "../app.ts";
 

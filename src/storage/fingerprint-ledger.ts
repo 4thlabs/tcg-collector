@@ -25,8 +25,9 @@ export class FingerprintLedger {
   /** Loads the ledger, or creates an empty one on the first run. */
   static async open(path: string): Promise<FingerprintLedger> {
     try {
-      const raw = JSON.parse(await readFile(path, "utf8")) as Record<string, LedgerEntry>;
-      return new FingerprintLedger(path, new Map(Object.entries(raw)));
+      const text = await readFile(path, "utf8");
+      const saved = JSON.parse(text) as Record<string, LedgerEntry>;
+      return new FingerprintLedger(path, new Map(Object.entries(saved)));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return new FingerprintLedger(path, new Map());
       throw error;
@@ -44,9 +45,12 @@ export class FingerprintLedger {
   /** Atomic write (temporary file then rename) so the ledger is never left truncated. */
   async save(): Promise<void> {
     await mkdir(dirname(this.path), { recursive: true });
-    const sorted = Object.fromEntries([...this.entries].sort(([a], [b]) => a.localeCompare(b)));
+    // Keys in order, so two saves of the same entries give the same file.
+    const keys = [...this.entries.keys()].sort((a, b) => a.localeCompare(b));
+    const sorted = Object.fromEntries(keys.map((key) => [key, this.entries.get(key)]));
+    const text = `${JSON.stringify(sorted, null, 2)}\n`;
     const temporary = `${this.path}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(sorted, null, 2)}\n`);
+    await writeFile(temporary, text);
     await rename(temporary, this.path);
   }
 }

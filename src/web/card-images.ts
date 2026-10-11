@@ -41,12 +41,20 @@ export class CardImages {
     const key = `${game}/${size}/${card.product}`;
     const running = this.pending.get(key);
     if (running) return running;
-    const loading = this.load(source, join(this.folder, game, size, card.product), card, size).finally(() => this.pending.delete(key));
+    const base = join(this.folder, game, size, card.product);
+    const loading = this.load(source, base, card, size);
     this.pending.set(key, loading);
-    return loading;
+    try {
+      return await loading;
+    } finally {
+      this.pending.delete(key);
+    }
   }
 
-  /** `base` is the cache path without extension: base.jpg (or .png…) holds the image, base.none marks a card without image. */
+  /**
+   * `base` is the cache path without extension: base.jpg (or .png…) holds the image,
+   * base.none marks a card without image.
+   */
   private async load(source: ImageSource, base: string, card: CardEntry, size: ImageSize): Promise<CardImage | null> {
     for (const [extension, type] of CardImages.types) {
       const bytes = await CardImages.readIfPresent(`${base}.${extension}`);
@@ -55,8 +63,12 @@ export class CardImages {
     if (await CardImages.readIfPresent(`${base}.none`)) return null;
 
     const image = await this.download(source, card, size);
-    if (image) await CardImages.writeAtomically(`${base}.${CardImages.extensionOf(image.type)}`, image.bytes);
-    else await CardImages.writeAtomically(`${base}.none`, Buffer.from("no image\n"));
+    if (image) {
+      const extension = CardImages.extensionOf(image.type);
+      await CardImages.writeAtomically(`${base}.${extension}`, image.bytes);
+    } else {
+      await CardImages.writeAtomically(`${base}.none`, Buffer.from("no image\n"));
+    }
     return image;
   }
 
@@ -65,14 +77,20 @@ export class CardImages {
     const url = await source.imageUrl(card, size);
     if (!url) return null;
     const response = await this.http.get(url, { headers: { accept: "image/*" } });
-    const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "";
-    if (response.status === 404 || !CardImages.extensionOf(type)) return null;
-    return { bytes: Buffer.from(await response.arrayBuffer()), type };
+    if (response.status === 404) return null;
+    // "image/jpeg; charset=…" -> "image/jpeg"
+    const contentType = response.headers.get("content-type") ?? "";
+    const type = contentType.split(";")[0].trim();
+    if (!CardImages.extensionOf(type)) return null;
+    const bytes = await response.arrayBuffer();
+    return { bytes: Buffer.from(bytes), type };
   }
 
   /** File extension of an image type kept here, e.g. "jpg" for "image/jpeg"; undefined for any other type. */
   private static extensionOf(type: string): string | undefined {
-    for (const [extension, known] of CardImages.types) if (known === type) return extension;
+    for (const [extension, known] of CardImages.types) {
+      if (known === type) return extension;
+    }
     return undefined;
   }
 

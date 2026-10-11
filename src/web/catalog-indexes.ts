@@ -28,7 +28,10 @@ export class CatalogIndexes {
   get(game: string): Promise<CatalogIndex> {
     const entry = this.entries.get(game);
     if (!entry) return this.buildFirst(game);
-    if (this.now() - entry.since > CatalogIndexes.maxAgeMs) this.rebuildInBackground(game, entry);
+    const ageMs = this.now() - entry.since;
+    if (ageMs > CatalogIndexes.maxAgeMs) {
+      this.rebuildInBackground(game, entry);
+    }
     return entry.index;
   }
 
@@ -40,7 +43,7 @@ export class CatalogIndexes {
     return index;
   }
 
-  /** The old index keeps answering until the new one is ready, and stays until the next attempt if the rebuild fails. */
+  /** The old index keeps answering until the new one is ready, and stays until the next attempt on failure. */
   private rebuildInBackground(game: string, entry: Entry): void {
     // Moving "since" now keeps the calls made during the rebuild from starting another one.
     entry.since = this.now();
@@ -53,12 +56,17 @@ export class CatalogIndexes {
   private async build(game: string): Promise<CatalogIndex> {
     const started = this.now();
     try {
-      const [products, trends] = await Promise.all([this.catalog.products(game), this.catalog.latestTrends(game)]);
+      const [products, trends] = await Promise.all([
+        this.catalog.products(game),
+        this.catalog.latestTrends(game),
+      ]);
       const index = new CatalogIndex(products, trends);
-      this.logger.info(`search index of game ${game}: ${index.size} products in ${this.now() - started} ms`);
+      const durationMs = this.now() - started;
+      this.logger.info(`search index of game ${game}: ${index.size} products in ${durationMs} ms`);
       return index;
     } catch (error) {
-      this.logger.warn(`search index of game ${game} failed: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`search index of game ${game} failed: ${message}`);
       throw error;
     }
   }

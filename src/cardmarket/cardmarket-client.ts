@@ -47,7 +47,9 @@ export class CardmarketClient {
 
   /** Raw file content, as published. */
   async download(file: FeedFile): Promise<Buffer> {
-    return Buffer.from(await this.http.get(this.urlOf(file)).arrayBuffer());
+    const response = await this.http.get(this.urlOf(file));
+    const bytes = await response.arrayBuffer();
+    return Buffer.from(bytes);
   }
 
   private urlOf(file: FeedFile): string {

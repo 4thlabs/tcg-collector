@@ -20,7 +20,10 @@ export class InfluxReader {
   /** All the rows of a SQL query. Values from outside always go through params, never into the SQL text. */
   async query(sql: string, params: QueryParams = {}): Promise<Row[]> {
     const rows: Row[] = [];
-    for await (const row of this.client.query(sql, this.database, { type: "sql", params })) rows.push(row);
+    const results = this.client.query(sql, this.database, { type: "sql", params });
+    for await (const row of results) {
+      rows.push(row);
+    }
     return rows;
   }
 

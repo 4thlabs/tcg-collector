@@ -17,7 +17,8 @@ export class GameSelection {
     const ids = text.split(",").map((part) => Number(part.trim()));
     const invalid = ids.filter((id) => !Number.isInteger(id) || id < 1);
     if (invalid.length > 0) throw new Error(`Invalid game ids: "${value}"`);
-    return new GameSelection([...new Set(ids)].sort((a, b) => a - b));
+    const unique = [...new Set(ids)];
+    return new GameSelection(unique.sort((a, b) => a - b));
   }
 
   static upTo(maxGameId: number): GameSelection {

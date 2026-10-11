@@ -1,5 +1,6 @@
 // Last archive day imported into InfluxDB, per file (catalogues and price guides), kept in InfluxDB itself.
-// The database is the only state of the import: a new or wiped database has no log, so the next import rebuilds it from the archives.
+// The database is the only state of the import: a new or wiped database has no log,
+// so the next import rebuilds it from the archives.
 import { Point } from "@influxdata/influxdb3-client";
 import { InfluxDay } from "../influx/influx-day.ts";
 import type { InfluxReader } from "../influx/influx-reader.ts";
@@ -18,12 +19,14 @@ export class ImportLedger {
     this.lastDays = lastDays;
   }
 
-  /** Reads the last imported day of each file from the database; empty when the database or the table does not exist yet. */
+  /** Reads the last imported day of each file; empty when the database or the table does not exist yet. */
   static async load(reader: InfluxReader): Promise<ImportLedger> {
     const lastDays = new Map<string, string>();
     try {
       const rows = await reader.query(`SELECT file, max(time) AS day FROM ${ImportLedger.table} GROUP BY file`);
-      for (const row of rows) lastDays.set(String(row.file), InfluxDay.of(row.day));
+      for (const row of rows) {
+        lastDays.set(String(row.file), InfluxDay.of(row.day));
+      }
     } catch (error) {
       if (!ImportLedger.isMissing(error)) throw error;
     }
@@ -52,8 +55,9 @@ export class ImportLedger {
   }
 
   /**
-   * InfluxDB 3 answers "database not found: …" before the first write, and "table '…' not found" before the first import.
-   * Any other error (InfluxDB unreachable, bad token) stops the import rather than starting over from the first archive.
+   * InfluxDB 3 answers "database not found: …" before the first write,
+   * and "table '…' not found" before the first import. Any other error (InfluxDB unreachable, bad token)
+   * stops the import rather than starting over from the first archive.
    */
   private static isMissing(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);

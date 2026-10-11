@@ -15,7 +15,13 @@ export class Collector {
   private readonly logger: Logger;
   private readonly kinds: readonly FeedKind[];
 
-  constructor(client: CardmarketClient, ledger: FingerprintLedger, archive: SnapshotArchive, logger: Logger, kinds = FeedKind.all) {
+  constructor(
+    client: CardmarketClient,
+    ledger: FingerprintLedger,
+    archive: SnapshotArchive,
+    logger: Logger,
+    kinds = FeedKind.all,
+  ) {
     this.client = client;
     this.ledger = ledger;
     this.archive = archive;
@@ -28,7 +34,10 @@ export class Collector {
     this.logger.info(`Collection started for ${games.ids.length} game ids`);
     const report = new CollectReport();
     for (const idGame of games.ids) {
-      for (const kind of this.kinds) await this.collectAndReport(new FeedFile(kind, idGame), now, report);
+      for (const kind of this.kinds) {
+        const file = new FeedFile(kind, idGame);
+        await this.collectAndReport(file, now, report);
+      }
       // The ledger is saved after each game: an interrupted collection keeps what it already got.
       await this.ledger.save();
     }
@@ -41,8 +50,12 @@ export class Collector {
       const { outcome, bytes } = await this.collectFile(file, now);
       report.add(file.key, outcome, bytes);
       // Archives are the interesting events; the rest is only visible at debug level.
-      if (outcome === "archived") this.logger.info(`archived ${file.key} (${(bytes / 1e6).toFixed(2)} MB)`);
-      else this.logger.debug(`${outcome} ${file.key}`);
+      if (outcome === "archived") {
+        const megabytes = (bytes / 1e6).toFixed(2);
+        this.logger.info(`archived ${file.key} (${megabytes} MB)`);
+      } else {
+        this.logger.debug(`${outcome} ${file.key}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       report.add(file.key, "failed", 0, message);

@@ -61,7 +61,8 @@ export class ApiQuery {
     const value = this.params[name];
     if (!value) return undefined;
     const number = Number(value);
-    if (!Number.isInteger(number) || number < min || number > max) throw ApiQuery.badRequest(`${name} must be a whole number from ${min} to ${max}`);
+    const inBounds = Number.isInteger(number) && number >= min && number <= max;
+    if (!inBounds) throw ApiQuery.badRequest(`${name} must be a whole number from ${min} to ${max}`);
     return number;
   }
 

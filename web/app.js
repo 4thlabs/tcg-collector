@@ -11,7 +11,9 @@ const GAMES = {
 /** Calls the JSON API of the server; errors carry the server's message. */
 class Api {
   async get(path, params) {
-    const response = await fetch(`${path}?${new URLSearchParams(params)}`);
+    const query = new URLSearchParams(params);
+    const response = await fetch(`${path}?${query}`);
+    // An error page may not be JSON: the status then tells what went wrong.
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
     return body;
@@ -22,29 +24,38 @@ class Api {
   }
 
   async card(game, product) {
-    return (await this.get("api/card", { game, product })).card;
+    const body = await this.get("api/card", { game, product });
+    return body.card;
   }
 
   async expansions(game) {
-    return (await this.get("api/expansions", { game })).expansions;
+    const body = await this.get("api/expansions", { game });
+    return body.expansions;
   }
 
   /** Day of the game's latest archived price guide (YYYY-MM-DD), or null. */
   async latestDay(game) {
-    return (await this.get("api/latest", { game })).day;
+    const body = await this.get("api/latest", { game });
+    return body.day;
   }
 
   async latestPrices(game, product) {
-    return (await this.get("api/prices", { game, product })).prices;
+    const body = await this.get("api/prices", { game, product });
+    return body.prices;
   }
 
   async dailyPrices(game, product, days) {
-    return (await this.get("api/daily", { game, product, days })).days;
+    const body = await this.get("api/daily", { game, product, days });
+    return body.days;
   }
 
-  /** Card image, cached by the server (Scryfall for Magic, starwarsunlimited.com for Star Wars Unlimited); 404 when there is none. */
+  /**
+   * Card image, cached by the server (Scryfall for Magic, starwarsunlimited.com for Star Wars Unlimited);
+   * 404 when there is none.
+   */
   imageUrl(game, product, size) {
-    return `api/image?${new URLSearchParams({ game, product, size })}`;
+    const query = new URLSearchParams({ game, product, size });
+    return `api/image?${query}`;
   }
 }
 
@@ -56,17 +67,31 @@ class PageState {
   static read() {
     const params = new URLSearchParams(location.search);
     const state = { ...PageState.defaults };
-    for (const field of PageState.fields) if (params.has(field)) state[field] = params.get(field);
-    if (!GAMES[state.game]) state.game = PageState.defaults.game;
+    for (const field of PageState.fields) {
+      if (params.has(field)) {
+        state[field] = params.get(field);
+      }
+    }
+    if (!GAMES[state.game]) {
+      state.game = PageState.defaults.game;
+    }
     return state;
   }
 
   static write(state, push = false) {
     const params = new URLSearchParams();
-    for (const field of PageState.fields) if (state[field] && state[field] !== PageState.defaults[field]) params.set(field, state[field]);
+    for (const field of PageState.fields) {
+      const value = state[field];
+      // Default values stay out of the address, to keep it short.
+      if (!value || value === PageState.defaults[field]) continue;
+      params.set(field, value);
+    }
     const url = params.size ? `?${params}` : location.pathname;
-    if (push) history.pushState(null, "", url);
-    else history.replaceState(null, "", url);
+    if (push) {
+      history.pushState(null, "", url);
+    } else {
+      history.replaceState(null, "", url);
+    }
   }
 }
 
@@ -79,7 +104,9 @@ class Format {
   }
 
   static expansion(card) {
-    return card.expansion ?? (card.expansionId == null ? "Unknown expansion" : `Expansion ${card.expansionId}`);
+    if (card.expansion != null) return card.expansion;
+    if (card.expansionId == null) return "Unknown expansion";
+    return `Expansion ${card.expansionId}`;
   }
 
   static version(card) {
@@ -87,14 +114,19 @@ class Format {
   }
 
   static cardmarketUrl(game, card) {
-    return `https://www.cardmarket.com/en/${GAMES[game].cardmarket}/Products?idProduct=${encodeURIComponent(card.product)}`;
+    const product = encodeURIComponent(card.product);
+    return `https://www.cardmarket.com/en/${GAMES[game].cardmarket}/Products?idProduct=${product}`;
   }
 
   /** "low €1.20 · foil €3.40", leaving out the prices the card does not have. */
   static otherPrices(card) {
     const parts = [];
-    if (card.low != null) parts.push(`low ${Format.price(card.low)}`);
-    if (card.trendFoil != null) parts.push(`foil ${Format.price(card.trendFoil)}`);
+    if (card.low != null) {
+      parts.push(`low ${Format.price(card.low)}`);
+    }
+    if (card.trendFoil != null) {
+      parts.push(`foil ${Format.price(card.trendFoil)}`);
+    }
     return parts.join(" · ");
   }
 
@@ -131,6 +163,7 @@ class LatestDay {
     this.element.textContent = "";
     try {
       const day = await this.api.latestDay(game);
+      // Another game may have been chosen meanwhile.
       if (this.game !== game) return;
       this.element.textContent = day ? `Latest prices: ${day}.` : "No prices imported yet.";
     } catch {
@@ -169,7 +202,9 @@ class Filters {
   }
 
   show(state) {
-    for (const field of ["q", "kind", "min", "max", "sort"]) this.form.elements[field].value = state[field];
+    for (const field of ["q", "kind", "min", "max", "sort"]) {
+      this.form.elements[field].value = state[field];
+    }
     this.expansionSelect.value = state.expansion;
   }
 
@@ -177,12 +212,17 @@ class Filters {
   async loadExpansions(game, selected) {
     if (this.loadedGame === game) return;
     this.loadedGame = game;
-    const first = this.expansionSelect.options[0];
-    this.expansionSelect.replaceChildren(first);
+    const allExpansions = this.expansionSelect.options[0];
+    this.expansionSelect.replaceChildren(allExpansions);
     try {
       const expansions = await this.api.expansions(game);
+      // Another game may have been chosen meanwhile.
       if (this.loadedGame !== game) return;
-      this.expansionSelect.append(...expansions.map((expansion) => new Option(`${expansion.label} (${expansion.count})`, String(expansion.id))));
+      const options = expansions.map((expansion) => {
+        const label = `${expansion.label} (${expansion.count})`;
+        return new Option(label, String(expansion.id));
+      });
+      this.expansionSelect.append(...options);
     } catch {
       // The list still works without the expansion filter.
     }
@@ -201,6 +241,7 @@ class ResultList {
     this.summary = document.getElementById("summary");
     this.more = document.getElementById("more");
     this.template = document.getElementById("card-template");
+    /** Number of the latest request: the answers to older ones are dropped. */
     this.sequence = 0;
     this.params = null;
     this.shown = 0;
@@ -208,23 +249,32 @@ class ResultList {
     this.more.addEventListener("click", () => this.load(false));
   }
 
-  /** New search: answers to older searches are dropped. */
+  /** New search, from the first page. */
   search(params) {
     this.params = params;
     this.shown = 0;
     return this.load(true);
   }
 
+  /** Loads the next page; `fresh` replaces the list instead of adding to it. */
   async load(fresh) {
-    const sequence = ++this.sequence;
+    this.sequence++;
+    const sequence = this.sequence;
     this.more.disabled = true;
-    if (fresh) this.summary.textContent = "Searching…";
+    if (fresh) {
+      this.summary.textContent = "Searching…";
+    }
     try {
-      const result = await this.api.search({ ...this.params, offset: this.shown, limit: ResultList.pageSize });
+      const page = { ...this.params, offset: this.shown, limit: ResultList.pageSize };
+      const result = await this.api.search(page);
       if (sequence !== this.sequence) return;
+
       const items = result.cards.map((card) => this.item(card));
-      if (fresh) this.list.replaceChildren(...items);
-      else this.list.append(...items);
+      if (fresh) {
+        this.list.replaceChildren(...items);
+      } else {
+        this.list.append(...items);
+      }
       this.shown += result.cards.length;
       this.total = result.total;
       this.summary.classList.remove("err");
@@ -243,7 +293,8 @@ class ResultList {
   summaryText() {
     if (this.total === 0) return "No product matches these filters.";
     const count = `${this.total.toLocaleString("en")} products`;
-    return this.total > this.shown ? `${count}, ${this.shown} shown` : count;
+    if (this.total <= this.shown) return count;
+    return `${count}, ${this.shown} shown`;
   }
 
   item(card) {
@@ -289,6 +340,9 @@ class PriceChart {
     dotted: { width: 1.5, dash: [1, 3] },
   };
 
+  /** Beyond about a year, the axis labels also show the year. */
+  static longPeriodDays = 370;
+
   constructor(canvas, note) {
     this.canvas = canvas;
     this.note = note;
@@ -299,25 +353,25 @@ class PriceChart {
   draw(days) {
     this.days = days;
     this.clear();
-    if (!days.length) return this.message("No price over this period.");
-    if (!window.Chart) return this.message("The chart library could not load.", true);
-    const color = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (!days.length) {
+      this.message("No price over this period.");
+      return;
+    }
+    if (!window.Chart) {
+      this.message("The chart library could not load.", true);
+      return;
+    }
+
+    const theme = getComputedStyle(document.documentElement);
+    const color = (name) => theme.getPropertyValue(name).trim();
     const muted = color("--muted");
     const grid = color("--line");
-    const datasets = PriceChart.series
-      .filter(({ field }) => days.some((day) => day[field] != null))
-      .map(({ field, label, color: token, line }) => ({
-        label,
-        data: days.map((day) => day[field]),
-        borderColor: color(token),
-        backgroundColor: color(token),
-        borderWidth: PriceChart.lines[line].width,
-        borderDash: PriceChart.lines[line].dash,
-        pointRadius: 0,
-        pointHoverRadius: 3,
-        stepped: true,
-      }));
-    const longPeriod = days.length > 370;
+    // Only the series with at least one price in the period.
+    const hasPrice = (series) => days.some((day) => day[series.field] != null);
+    const datasets = PriceChart.series.filter(hasPrice).map((series) => PriceChart.dataset(series, days, color));
+    const withYear = days.length > PriceChart.longPeriodDays;
+    const narrow = this.canvas.clientWidth < 500;
+
     this.chart = new window.Chart(this.canvas, {
       type: "line",
       data: { labels: days.map((day) => day.day), datasets },
@@ -328,7 +382,11 @@ class PriceChart {
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { position: "bottom", labels: { color: muted, boxWidth: 14 } },
-          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${Format.price(item.parsed.y)}` } },
+          tooltip: {
+            callbacks: {
+              label: (item) => `${item.dataset.label}: ${Format.price(item.parsed.y)}`,
+            },
+          },
         },
         scales: {
           x: {
@@ -336,22 +394,24 @@ class PriceChart {
             ticks: {
               color: muted,
               maxRotation: 0,
-              maxTicksLimit: this.canvas.clientWidth < 500 ? 4 : 8,
-              // dd/mm, with the year when the period spans more than a year.
+              maxTicksLimit: narrow ? 4 : 8,
               callback(value) {
-                const day = this.getLabelForValue(value);
-                return `${day.slice(8, 10)}/${day.slice(5, 7)}${longPeriod ? `/${day.slice(2, 4)}` : ""}`;
+                return PriceChart.shortDay(this.getLabelForValue(value), withYear);
               },
             },
           },
-          y: { grid: { color: grid }, ticks: { color: muted, callback: (value) => Format.price(value) } },
+          y: {
+            grid: { color: grid },
+            ticks: { color: muted, callback: (value) => Format.price(value) },
+          },
         },
       },
     });
   }
 
   redraw() {
-    if (this.chart) this.draw(this.days);
+    if (!this.chart) return;
+    this.draw(this.days);
   }
 
   clear() {
@@ -362,6 +422,29 @@ class PriceChart {
 
   message(text, isError = false) {
     this.note.replaceChildren(Format.note(text, isError));
+  }
+
+  /** One line of the chart: a stepped line, since a price holds until the next price guide. */
+  static dataset(series, days, color) {
+    const style = PriceChart.lines[series.line];
+    return {
+      label: series.label,
+      data: days.map((day) => day[series.field]),
+      borderColor: color(series.color),
+      backgroundColor: color(series.color),
+      borderWidth: style.width,
+      borderDash: style.dash,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      stepped: true,
+    };
+  }
+
+  /** "2026-10-03" -> "03/10", or "03/10/26" with the year. */
+  static shortDay(day, withYear) {
+    const dayAndMonth = `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+    if (!withYear) return dayAndMonth;
+    return `${dayAndMonth}/${day.slice(2, 4)}`;
   }
 }
 
@@ -379,28 +462,26 @@ class CardSheet {
   constructor(api, onClose) {
     this.api = api;
     this.dialog = document.getElementById("sheet");
-    this.chart = new PriceChart(this.dialog.querySelector("canvas"), this.dialog.querySelector(".chart-note"));
+    const canvas = this.dialog.querySelector("canvas");
+    const chartNote = this.dialog.querySelector(".chart-note");
+    this.chart = new PriceChart(canvas, chartNote);
     this.range = this.dialog.querySelector(".range");
     this.card = null;
     this.game = null;
     this.days = 90;
+
     this.dialog.querySelector(".close").addEventListener("click", () => this.dialog.close());
     // A click on the backdrop (outside the sheet) closes it.
     this.dialog.addEventListener("click", (event) => {
-      if (event.target === this.dialog) this.dialog.close();
+      if (event.target !== this.dialog) return;
+      this.dialog.close();
     });
     this.dialog.addEventListener("close", () => {
       this.card = null;
       this.chart.clear();
       onClose();
     });
-    this.range.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-days]");
-      if (!button) return;
-      this.days = Number(button.dataset.days);
-      this.showRange();
-      this.loadDaily();
-    });
+    this.range.addEventListener("click", (event) => this.rangeClicked(event));
   }
 
   get isOpen() {
@@ -412,44 +493,63 @@ class CardSheet {
     this.game = game;
     this.card = card;
     this.render();
-    if (!this.dialog.open) this.dialog.showModal();
+    if (!this.dialog.open) {
+      this.dialog.showModal();
+    }
     this.loadLatest();
     this.loadDaily();
   }
 
   close() {
-    if (this.dialog.open) this.dialog.close();
+    if (!this.dialog.open) return;
+    this.dialog.close();
   }
 
   render() {
     const { game, card } = this;
-    const text = (selector, value) => (this.dialog.querySelector(selector).textContent = value);
     Format.nameInto(this.dialog.querySelector(".card-name"), card);
-    text(".card-game", GAMES[game].name);
-    text(".card-id", card.product);
-    text(".card-expansion", card.expansionId === undefined ? "" : [Format.expansion(card), Format.version(card)].filter(Boolean).join(" · "));
-    text(".card-added", card.added ? `added ${card.added}` : "");
-    text(".asof", "");
+    this.setText(".card-game", GAMES[game].name);
+    this.setText(".card-id", card.product);
+    this.setText(".card-expansion", CardSheet.expansionLine(card));
+    this.setText(".card-added", card.added ? `added ${card.added}` : "");
+    this.setText(".asof", "");
     this.dialog.querySelector(".card-link").href = Format.cardmarketUrl(game, card);
     this.dialog.querySelector(".tiles").replaceChildren(Format.note("Loading prices…"));
     this.showArt();
     this.showRange();
   }
 
-  /** A new image each time, so the previous card's art never shows while this one loads: the placeholder background does. */
+  setText(selector, value) {
+    this.dialog.querySelector(selector).textContent = value;
+  }
+
+  /** A new image each time, so the previous card's art never shows while this one loads. */
   showArt() {
     const art = this.dialog.querySelector(".art");
     const image = new Image();
     image.alt = this.card.name;
     image.addEventListener("load", () => image.classList.add("loaded"));
-    image.addEventListener("error", () => (art.hidden = true));
+    image.addEventListener("error", () => {
+      art.hidden = true;
+    });
     art.hidden = false;
     art.replaceChildren(image);
     image.src = this.api.imageUrl(this.game, this.card.product, "normal");
   }
 
+  rangeClicked(event) {
+    const button = event.target.closest("button[data-days]");
+    if (!button) return;
+    this.days = Number(button.dataset.days);
+    this.showRange();
+    this.loadDaily();
+  }
+
   showRange() {
-    for (const button of this.range.children) button.setAttribute("aria-pressed", String(Number(button.dataset.days) === this.days));
+    for (const button of this.range.children) {
+      const pressed = Number(button.dataset.days) === this.days;
+      button.setAttribute("aria-pressed", String(pressed));
+    }
   }
 
   async loadLatest() {
@@ -457,14 +557,19 @@ class CardSheet {
     const tiles = this.dialog.querySelector(".tiles");
     try {
       const prices = await this.api.latestPrices(this.game, card.product);
+      // Another card may have been opened meanwhile.
       if (card !== this.card) return;
-      if (!prices) return tiles.replaceChildren(Format.note("No archived price for this product."));
+      if (!prices) {
+        tiles.replaceChildren(Format.note("No archived price for this product."));
+        return;
+      }
       // Foil tiles only show for a card that has a foil price.
       const shown = CardSheet.fields.filter(({ field, foil }) => !foil || prices[field] != null);
       tiles.replaceChildren(...shown.map((entry) => CardSheet.tile(entry, prices)));
-      this.dialog.querySelector(".asof").textContent = `Latest archived price guide: ${prices.day}`;
+      this.setText(".asof", `Latest archived price guide: ${prices.day}`);
     } catch (error) {
-      if (card === this.card) tiles.replaceChildren(Format.note(`Prices failed: ${error.message}.`, true));
+      if (card !== this.card) return;
+      tiles.replaceChildren(Format.note(`Prices failed: ${error.message}.`, true));
     }
   }
 
@@ -474,15 +579,27 @@ class CardSheet {
     this.chart.clear();
     try {
       const rows = await this.api.dailyPrices(this.game, card.product, days);
-      if (card === this.card && days === this.days) this.chart.draw(rows);
+      // Another card or period may have been chosen meanwhile.
+      if (card !== this.card || days !== this.days) return;
+      this.chart.draw(rows);
     } catch (error) {
-      if (card === this.card) this.chart.message(`Daily prices failed: ${error.message}.`, true);
+      if (card !== this.card) return;
+      this.chart.message(`Daily prices failed: ${error.message}.`, true);
     }
+  }
+
+  /** "Expansion · V.2"; empty for a card known only by its id (opened from the address). */
+  static expansionLine(card) {
+    if (card.expansionId === undefined) return "";
+    const parts = [Format.expansion(card), Format.version(card)];
+    return parts.filter(Boolean).join(" · ");
   }
 
   static tile({ field, label, foil }, prices) {
     const tile = document.createElement("div");
-    tile.className = `tile${foil ? " foil" : ""}${prices[field] == null ? " empty" : ""}`;
+    tile.classList.add("tile");
+    tile.classList.toggle("foil", foil);
+    tile.classList.toggle("empty", prices[field] == null);
     const name = document.createElement("span");
     name.className = "label";
     name.textContent = label;
@@ -507,40 +624,58 @@ class CardPage {
   }
 
   async start() {
-    this.gameButtons.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-game]");
-      if (!button || button.dataset.game === this.state.game) return;
-      this.state = { ...PageState.defaults, game: button.dataset.game, sort: this.state.sort, kind: this.state.kind };
-      PageState.write(this.state, true);
-      this.render();
-    });
+    this.gameButtons.addEventListener("click", (event) => this.gameClicked(event));
     // Back and forward buttons: show the state of that address.
     addEventListener("popstate", () => {
       this.state = PageState.read();
       this.render();
     });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.sheet.chart.redraw());
+    // The chart reads the theme's colors when it draws: it is redrawn when the theme changes.
+    const darkTheme = matchMedia("(prefers-color-scheme: dark)");
+    darkTheme.addEventListener("change", () => this.sheet.chart.redraw());
     await this.render();
   }
 
   async render() {
-    for (const button of this.gameButtons.children) button.setAttribute("aria-pressed", String(button.dataset.game === this.state.game));
+    for (const button of this.gameButtons.children) {
+      const pressed = button.dataset.game === this.state.game;
+      button.setAttribute("aria-pressed", String(pressed));
+    }
     this.filters.show(this.state);
     this.latestDay.show(this.state.game);
-    const expansions = this.filters.loadExpansions(this.state.game, this.state.expansion);
+    const expansionsLoaded = this.filters.loadExpansions(this.state.game, this.state.expansion);
     this.results.search(this.searchParams());
-    await expansions;
-    if (this.state.card) {
-      if (this.sheet.card?.product !== this.state.card) await this.openFromAddress(this.state.game, this.state.card);
-    } else {
+    await expansionsLoaded;
+
+    // Read the state again: it may have changed while the expansions loaded.
+    if (!this.state.card) {
       this.sheet.close();
+      return;
     }
+    const alreadyOpen = this.sheet.card?.product === this.state.card;
+    if (!alreadyOpen) {
+      await this.openFromAddress(this.state.game, this.state.card);
+    }
+  }
+
+  /** A new game starts a new search, keeping only the kind and the sort order. */
+  gameClicked(event) {
+    const button = event.target.closest("button[data-game]");
+    if (!button || button.dataset.game === this.state.game) return;
+    const { kind, sort } = this.state;
+    this.state = { ...PageState.defaults, game: button.dataset.game, kind, sort };
+    PageState.write(this.state, true);
+    this.render();
   }
 
   /** A card named in the address: its details come from the server. */
   async openFromAddress(game, product) {
     const card = await this.api.card(game, product).catch(() => null);
-    if (this.state.card === product) this.sheet.open(game, card ?? { product, name: `#${product}` });
+    // The address may have changed while the card loaded.
+    if (this.state.card !== product) return;
+    // A card the server does not find still opens, under its id.
+    const shown = card ?? { product, name: `#${product}` };
+    this.sheet.open(game, shown);
   }
 
   filtersChanged() {
