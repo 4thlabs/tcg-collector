@@ -18,9 +18,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.4",
     "@influxdata/influxdb3-client": "^2.4.0",
     "chart.js": "^4.5.1",
     "commander": "^14.0.0",
+    "hono": "^4.13.13",
     "ky": "^2.1.0",
     "minisearch": "^7.2.0",
     "winston": "^3.19.0"

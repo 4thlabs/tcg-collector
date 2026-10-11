@@ -107,3 +107,18 @@ test("tells the day of the latest price guide", async () => {
   assert.deepEqual(await get("/api/latest?game=1"), { status: 200, body: { day: "2026-10-03" } });
   assert.equal((await get("/api/latest?game=x")).status, 400);
 });
+
+test("answers 404 for an unknown API and 405 for other methods", async () => {
+  assert.deepEqual(await get("/api/unknown?game=1"), { status: 404, body: { error: "Not found" } });
+  const response = await fetch(`${base}/api/latest?game=1`, { method: "POST" });
+  assert.equal(response.status, 405);
+  assert.deepEqual(await response.json(), { error: "Only GET is supported" });
+});
+
+test("never caches the API answers", async () => {
+  for (const path of ["/api/latest?game=1", "/api/latest?game=x"]) {
+    const response = await fetch(base + path);
+    assert.equal(response.headers.get("cache-control"), "no-store", path);
+    await response.arrayBuffer();
+  }
+});

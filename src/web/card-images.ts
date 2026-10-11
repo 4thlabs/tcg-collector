@@ -8,7 +8,7 @@ import type { PoliteHttp } from "./polite-http.ts";
 export type ImageSize = "small" | "normal";
 
 export interface CardImage {
-  bytes: Buffer;
+  bytes: Buffer<ArrayBuffer>;
   type: string;
 }
 
@@ -67,7 +67,7 @@ export class CardImages {
     return { bytes, type };
   }
 
-  private static async readIfPresent(path: string): Promise<Buffer | null> {
+  private static async readIfPresent(path: string): Promise<Buffer<ArrayBuffer> | null> {
     try {
       return await readFile(path);
     } catch (error) {

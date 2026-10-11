@@ -116,7 +116,7 @@ The container collects (and imports) on start, then every day at `COLLECT_AT` (U
 - The page state (game, search, filters, open card) is in the address, so a search or a card can be bookmarked.
 - No login: serve it on your own network only.
 
-The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) uses `node:http` and answers JSON routes `/api/search?game&q&expansion&kind&min&max&sort&offset&limit`, `/api/card?game&product`, `/api/expansions?game`, `/api/latest?game` (day of the latest price guide), `/api/prices?game&product` and `/api/daily?game&product&days`, plus the images at `/api/image?game&product&size`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
+The page is plain HTML, CSS and JavaScript in `web/`, with no build step; Chart.js comes from its npm package. The server (`src/web/`) runs on [Hono](https://hono.dev) and answers JSON routes `/api/search?game&q&expansion&kind&min&max&sort&offset&limit`, `/api/card?game&product`, `/api/expansions?game`, `/api/latest?game` (day of the latest price guide), `/api/prices?game&product` and `/api/daily?game&product&days`, plus the images at `/api/image?game&product&size`. Values from the request reach InfluxDB as query parameters, never in the SQL text.
 
 ## Grafana
 
@@ -150,7 +150,8 @@ src/import/product-point-factory.ts  catalogue line -> InfluxDB point, change de
 src/import/import-ledger.ts          last imported day per file, in the import_log table
 src/influx/influx-writer.ts          batched writes through the official InfluxDB 3 client
 src/influx/influx-reader.ts          SQL queries with parameters, through the same client
-src/web/web-server.ts                HTTP server of the card page: static files and JSON API
+src/web/web-server.ts                HTTP server of the card page, on Hono: static files and JSON routes
+src/web/api-query.ts                 checks the API query parameters (400 on a bad value)
 src/web/card-catalog.ts              InfluxDB queries: products, latest trends, latest and daily prices
 src/web/catalog-index.ts             in-memory search index of a game: fuzzy search, filters, versions
 src/web/catalog-indexes.ts           one index per game, rebuilt in the background every hour
@@ -162,4 +163,4 @@ web/                                 the card page: index.html, style.css, app.j
 src/logging/logger-factory.ts        Winston loggers (text or JSON)
 ```
 
-Tests: `npm test`. Typecheck: `npm run typecheck`.
+Tests: `npm test`. Typecheck: `npm run typecheck`. Conventions for contributors and coding agents: [AGENTS.md](AGENTS.md).
