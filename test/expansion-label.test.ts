@@ -19,6 +19,7 @@ test("uses a rarity set name", () => {
 
 test("takes the shortest deck prefix", () => {
   const names = ['Commander: Foundations: ""Jump Scare!""', 'Commander: Foundations: ""Elves""'];
+
   assert.equal(ExpansionLabel.fromSealedNames(names), "Commander: Foundations");
 });
 

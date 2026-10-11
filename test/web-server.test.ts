@@ -43,6 +43,7 @@ class FakeCatalog extends CardCatalog {
 
   override async latestPrices(game: string, product: string): Promise<Prices | null> {
     this.calls.push(`prices ${game} ${product}`);
+
     return null;
   }
 
@@ -58,6 +59,7 @@ let base = "";
 
 before(async () => {
   const images = new CardImages(await mkdtemp(join(tmpdir(), "images-")), new PoliteHttp(), new Map());
+
   server = new WebServer({ catalog, indexes: new CatalogIndexes(catalog, logger), images, logger });
   base = `http://127.0.0.1:${await server.listen(0, "127.0.0.1")}`;
 });
@@ -65,12 +67,14 @@ after(() => server.close());
 
 const get = async (path: string) => {
   const response = await fetch(base + path);
+
   return { status: response.status, body: (await response.json().catch(() => null)) as unknown };
 };
 
 test("serves the page and Chart.js", async () => {
   for (const path of ["/", "/app.js", "/style.css", "/vendor/chart.js"]) {
     const response = await fetch(base + path);
+
     assert.equal(response.status, 200, path);
     await response.arrayBuffer();
   }
@@ -84,6 +88,7 @@ test("serves nothing else from disk", async () => {
 
 test("searches, filters and describes cards", async () => {
   const search = (await get("/api/search?game=1&q=sol%20rin&kind=single")).body as SearchResult;
+
   assert.equal(search.total, 1);
   assert.deepEqual(
     { ...search.cards[0] },
@@ -121,6 +126,7 @@ test("refuses bad parameters before querying", async () => {
   ]) {
     assert.equal((await get(`/api/${query}`)).status, 400, query);
   }
+
   assert.equal(catalog.calls.length, 1);
 });
 
@@ -143,6 +149,7 @@ test("tells the day of the latest price guide", async () => {
 test("answers 404 for an unknown API and 405 for other methods", async () => {
   assert.deepEqual(await get("/api/unknown?game=1"), { status: 404, body: { error: "Not found" } });
   const response = await fetch(`${base}/api/latest?game=1`, { method: "POST" });
+
   assert.equal(response.status, 405);
   assert.deepEqual(await response.json(), { error: "Only GET is supported" });
 });
@@ -150,6 +157,7 @@ test("answers 404 for an unknown API and 405 for other methods", async () => {
 test("never caches the API answers", async () => {
   for (const path of ["/api/latest?game=1", "/api/latest?game=x"]) {
     const response = await fetch(base + path);
+
     assert.equal(response.headers.get("cache-control"), "no-store", path);
     await response.arrayBuffer();
   }

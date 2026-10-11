@@ -37,9 +37,11 @@ export class CardmarketClient {
     const response = await this.http.head(this.urlOf(file), {
       throwHttpErrors: (status) => status !== 403 && status !== 404,
     });
+
     if (!response.ok) {
       return null;
     }
+
     return {
       etag: response.headers.get("etag") ?? "",
       lastModified: response.headers.get("last-modified") ?? "",
@@ -51,6 +53,7 @@ export class CardmarketClient {
   async download(file: FeedFile): Promise<Buffer> {
     const response = await this.http.get(this.urlOf(file));
     const bytes = await response.arrayBuffer();
+
     return Buffer.from(bytes);
   }
 

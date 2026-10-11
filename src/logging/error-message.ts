@@ -5,6 +5,7 @@ export class ErrorMessage {
     if (error instanceof Error) {
       return error.message;
     }
+
     return String(error);
   }
 }

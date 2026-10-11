@@ -19,9 +19,11 @@ export class ApiQuery {
   /** Game, product and expansion ids are Cardmarket numbers. */
   id(name: string): string {
     const value = this.params[name] ?? "";
+
     if (!/^\d{1,9}$/.test(value)) {
       throw ApiQuery.badRequest(`${name} must be a number`);
     }
+
     return value;
   }
 
@@ -32,17 +34,21 @@ export class ApiQuery {
 
   imageSize(): ImageSize {
     const size = this.params.size || "small";
+
     if (!CardImages.sizes.includes(size as ImageSize)) {
       throw ApiQuery.badRequest("size must be small or normal");
     }
+
     return size as ImageSize;
   }
 
   search(): SearchRequest {
     const text = (this.params.q ?? "").trim();
+
     if (text.length > 100) {
       throw ApiQuery.badRequest("q must be at most 100 characters");
     }
+
     return {
       text,
       kind: this.choice("kind", ApiQuery.kinds),
@@ -58,36 +64,46 @@ export class ApiQuery {
   /** One of the allowed values; the first one when absent or empty. */
   private choice<T extends string>(name: string, allowed: readonly T[]): T {
     const value = (this.params[name] || allowed[0]) as T;
+
     if (!allowed.includes(value)) {
       throw ApiQuery.badRequest(`${name} must be one of ${allowed.join(", ")}`);
     }
+
     return value;
   }
 
   /** Optional whole number within bounds; undefined when absent or empty. */
   private integer(name: string, min: number, max: number): number | undefined {
     const value = this.params[name];
+
     if (!value) {
       return undefined;
     }
+
     const number = Number(value);
     const inBounds = Number.isInteger(number) && number >= min && number <= max;
+
     if (!inBounds) {
       throw ApiQuery.badRequest(`${name} must be a whole number from ${min} to ${max}`);
     }
+
     return number;
   }
 
   /** Optional price in euros; undefined when absent or empty. */
   private price(name: string): number | undefined {
     const value = this.params[name];
+
     if (!value) {
       return undefined;
     }
+
     const number = Number(value);
+
     if (!Number.isFinite(number) || number < 0) {
       throw ApiQuery.badRequest(`${name} must be a price in euros`);
     }
+
     return number;
   }
 

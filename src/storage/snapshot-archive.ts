@@ -32,10 +32,13 @@ export class SnapshotArchive {
   async store(file: FeedFile, day: string, body: Buffer): Promise<StoredSnapshot> {
     const path = this.pathOf(file, day);
     const compressed = await gzipAsync(body, { level: constants.Z_BEST_COMPRESSION });
+
     await mkdir(this.folderOf(file), { recursive: true });
     const temporary = `${path}.tmp`;
+
     await writeFile(temporary, compressed);
     await rename(temporary, path);
+
     return { path, compressedSize: compressed.length };
   }
 
@@ -45,11 +48,13 @@ export class SnapshotArchive {
       const names = await readdir(this.folderOf(file));
       const archives = names.filter((name) => SnapshotArchive.archiveName.test(name));
       const days = archives.map((name) => name.slice(0, 10));
+
       return days.sort();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return [];
       }
+
       throw error;
     }
   }
@@ -59,6 +64,7 @@ export class SnapshotArchive {
     const compressed = await readFile(this.pathOf(file, day));
     const body = await gunzipAsync(compressed);
     const text = body.toString("utf8");
+
     return JSON.parse(text) as T;
   }
 

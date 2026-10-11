@@ -36,9 +36,11 @@ export class CollectReport {
 
   get archivedBytes(): number {
     let total = 0;
+
     for (const result of this.withOutcome("archived")) {
       total += result.bytes;
     }
+
     return total;
   }
 
@@ -46,6 +48,7 @@ export class CollectReport {
   summary(): string {
     const seconds = Math.round((Date.now() - this.startedAt) / 1000);
     const megabytes = (this.archivedBytes / 1e6).toFixed(1);
+
     return [
       `Collection finished in ${seconds} s: ${this.count("archived")} archived (${megabytes} MB compressed)`,
       `${this.count("unchanged")} unchanged (same ETag)`,

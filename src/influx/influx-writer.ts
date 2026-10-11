@@ -37,8 +37,10 @@ export class InfluxWriter {
   async write(points: readonly Point[]): Promise<number> {
     for (let start = 0; start < points.length; start += InfluxWriter.batchSize) {
       const batch = points.slice(start, start + InfluxWriter.batchSize);
+
       await this.client.write(batch, this.database);
     }
+
     return points.length;
   }
 

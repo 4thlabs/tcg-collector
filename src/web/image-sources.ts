@@ -14,6 +14,7 @@ export class ScryfallImages implements ImageSource {
     if (!card.single) {
       return null;
     }
+
     return `https://api.scryfall.com/cards/cardmarket/${card.product}?format=image&version=${size}`;
   }
 }
@@ -87,15 +88,20 @@ export class SwuImages implements ImageSource {
   async imageUrl(card: CardEntry, size: ImageSize): Promise<string | null> {
     if (!this.found.has(card.product)) {
       const lookedUp = await this.lookUp(card);
+
       this.found.set(card.product, lookedUp);
     }
+
     const found = this.found.get(card.product);
+
     if (!found) {
       return null;
     }
+
     if (size === "small") {
       return found.small;
     }
+
     return found.image;
   }
 
@@ -103,6 +109,7 @@ export class SwuImages implements ImageSource {
     if (!card.single) {
       return null;
     }
+
     // "Echo Base // Experience Token" is the base: only the first face is looked up.
     const name = card.name.split(" // ")[0];
     const expansion = card.expansionId === null ? undefined : SwuImages.expansions.get(card.expansionId);
@@ -111,14 +118,17 @@ export class SwuImages implements ImageSource {
     const wanted = SwuImages.key(name);
     const isSameCard = (candidate: SwuCard) => {
       const candidateName = SwuImages.fullName(candidate);
+
       return SwuImages.key(candidateName) === wanted;
     };
+
     const candidates = results.filter(isSameCard);
 
     // Promos, prerelease and championship expansions are not in the table: any printing of the card shows its art.
     if (!expansion) {
       return SwuImages.anyPrinting(candidates);
     }
+
     return SwuImages.pick(candidates, expansion.hyperspace, card.trendFoil !== null);
   }
 
@@ -131,60 +141,77 @@ export class SwuImages implements ImageSource {
       "pagination[pageSize]": "100",
       "filters[title][$startsWithi]": title,
     };
+
     if (setCode) {
       searchParams["filters[expansion][code][$eq]"] = setCode;
     }
+
     const response = await this.http.get(SwuImages.api, { searchParams });
+
     if (response.status === 404) {
       return [];
     }
+
     const answer = (await response.json()) as SwuAnswer;
+
     return SwuImages.cards(answer);
   }
 
   private static expansionsById(): Map<number, SwuExpansion> {
     const expansions = new Map<number, SwuExpansion>();
+
     for (const [code, normal, hyperspace] of SwuImages.sets) {
       expansions.set(normal, { code, hyperspace: false });
       expansions.set(hyperspace, { code, hyperspace: true });
     }
+
     return expansions;
   }
 
   /** The Standard printing when there is one, else the first one found. */
   private static anyPrinting(candidates: SwuCard[]): SwuCard | null {
     const standard = candidates.find((card) => card.variants.includes("Standard"));
+
     if (standard) {
       return standard;
     }
+
     return candidates[0] ?? null;
   }
 
   /** The printing that matches a product of a set's expansion: Standard, or Hyperspace / Showcase. */
   private static pick(candidates: SwuCard[], hyperspace: boolean, hasFoilPrice: boolean): SwuCard | null {
     const variant = (name: string) => candidates.find((card) => card.variants.includes(name)) ?? null;
+
     if (!hyperspace) {
       return variant("Standard");
     }
+
     // In the Hyperspace expansion, the product with a foil price is the Showcase printing.
     if (hasFoilPrice) {
       const showcase = variant("Showcase");
+
       if (showcase) {
         return showcase;
       }
     }
+
     return variant("Hyperspace");
   }
 
   /** The cards of an answer that have an image. */
   private static cards(answer: SwuAnswer): SwuCard[] {
     const cards: SwuCard[] = [];
+
     for (const { attributes: card } of answer.data) {
       const art = card.artFront?.data?.attributes;
+
       if (!art) {
         continue;
       }
+
       const variantTypes = card.variantTypes?.data ?? [];
+
       cards.push({
         title: card.title,
         subtitle: card.subtitle || null,
@@ -193,6 +220,7 @@ export class SwuImages implements ImageSource {
         small: art.formats?.xxsmall?.url ?? art.url,
       });
     }
+
     return cards;
   }
 
@@ -201,6 +229,7 @@ export class SwuImages implements ImageSource {
     if (!card.subtitle) {
       return card.title;
     }
+
     return `${card.title}, ${card.subtitle}`;
   }
 
@@ -209,6 +238,7 @@ export class SwuImages implements ImageSource {
     // NFD splits "é" into "e" and an accent mark, which goes away with the punctuation.
     const decomposed = name.normalize("NFD");
     const lowerCase = decomposed.toLowerCase();
+
     return lowerCase.replace(/[^a-z0-9]/g, "");
   }
 }

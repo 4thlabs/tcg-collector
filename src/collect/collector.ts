@@ -34,14 +34,18 @@ export class Collector {
   async collect(games: GameSelection, now = new Date()): Promise<CollectReport> {
     this.logger.info(`Collection started for ${games.ids.length} game ids`);
     const report = new CollectReport();
+
     for (const idGame of games.ids) {
       for (const kind of this.kinds) {
         const file = new FeedFile(kind, idGame);
+
         await this.collectAndReport(file, now, report);
       }
+
       // The ledger is saved after each game: an interrupted collection keeps what it already got.
       await this.ledger.save();
     }
+
     return report;
   }
 
@@ -49,16 +53,19 @@ export class Collector {
   private async collectAndReport(file: FeedFile, now: Date, report: CollectReport): Promise<void> {
     try {
       const { outcome, bytes } = await this.collectFile(file, now);
+
       report.add(file.key, outcome, bytes);
       // Archives are the interesting events; the rest is only visible at debug level.
       if (outcome === "archived") {
         const megabytes = (bytes / 1e6).toFixed(2);
+
         this.logger.info(`archived ${file.key} (${megabytes} MB)`);
       } else {
         this.logger.debug(`${outcome} ${file.key}`);
       }
     } catch (error) {
       const message = ErrorMessage.of(error);
+
       report.add(file.key, "failed", 0, message);
       this.logger.warn(`failed ${file.key}: ${message}`);
     }
@@ -66,27 +73,34 @@ export class Collector {
 
   private async collectFile(file: FeedFile, now: Date): Promise<{ outcome: Outcome; bytes: number }> {
     const version = await this.client.probe(file);
+
     if (!version) {
       return { outcome: "absent", bytes: 0 };
     }
 
     const previous = this.ledger.entry(file.key);
     const checkedAt = now.toISOString();
+
     if (previous && previous.etag === version.etag) {
       this.ledger.record(file.key, { ...previous, checkedAt });
+
       return { outcome: "unchanged", bytes: 0 };
     }
 
     const body = await this.client.download(file);
     const fingerprint = ContentFingerprint.of(body);
+
     if (previous && previous.fingerprint === fingerprint) {
       this.ledger.record(file.key, { ...previous, etag: version.etag, checkedAt });
+
       return { outcome: "same-content", bytes: 0 };
     }
 
     const day = checkedAt.slice(0, 10);
     const stored = await this.archive.store(file, day, body);
+
     this.ledger.record(file.key, { etag: version.etag, fingerprint, archivedOn: day, checkedAt });
+
     return { outcome: "archived", bytes: stored.compressedSize };
   }
 }

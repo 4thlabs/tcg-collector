@@ -55,6 +55,7 @@ export class CardCatalog {
        GROUP BY product`,
       { game },
     );
+
     return rows.map((row) => CardCatalog.toProduct(row));
   }
 
@@ -66,6 +67,7 @@ export class CardCatalog {
        WHERE game = $game AND time = (SELECT max(time) FROM price WHERE game = $game)`,
       { game },
     );
+
     return rows.map((row) => ({
       product: String(row.product),
       trend: CardCatalog.numberOrNull(row.trend),
@@ -78,9 +80,11 @@ export class CardCatalog {
   async latestDay(game: string): Promise<string | null> {
     const rows = await this.reader.query(`SELECT max(time) AS day FROM price WHERE game = $game`, { game });
     const day = rows[0]?.day;
+
     if (day == null) {
       return null;
     }
+
     return InfluxDay.of(day);
   }
 
@@ -95,9 +99,11 @@ export class CardCatalog {
        LIMIT 1`,
       { game, product },
     );
+
     if (rows.length === 0) {
       return null;
     }
+
     return CardCatalog.toPrices(rows[0], rows[0].time);
   }
 
@@ -122,15 +128,18 @@ export class CardCatalog {
     const prices = rows.map((row) => CardCatalog.toPrices(row, row.day));
     const hasPrice = (day: Prices) => priceFields.some((field) => day[field] !== null);
     const first = prices.findIndex(hasPrice);
+
     if (first < 0) {
       return [];
     }
+
     return prices.slice(first);
   }
 
   private static toProduct(row: Row): ProductRecord {
     // date_added is a date and time; the page only shows the day.
     const added = row.added == null ? null : String(row.added).slice(0, 10);
+
     return {
       product: String(row.product),
       name: String(row.name),
@@ -142,9 +151,11 @@ export class CardCatalog {
 
   private static toPrices(row: Row, time: unknown): Prices {
     const prices = { day: InfluxDay.of(time) } as Prices;
+
     for (const field of priceFields) {
       prices[field] = CardCatalog.numberOrNull(row[field]);
     }
+
     return prices;
   }
 
@@ -152,6 +163,7 @@ export class CardCatalog {
     if (value == null) {
       return null;
     }
+
     return Number(value);
   }
 }

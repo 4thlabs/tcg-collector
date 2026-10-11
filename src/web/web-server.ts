@@ -52,6 +52,7 @@ export class WebServer {
       this.server.once("error", reject);
       this.server.listen(port, host, () => {
         const address = this.server.address();
+
         resolve(typeof address === "object" && address ? address.port : port);
       });
     });
@@ -69,12 +70,14 @@ export class WebServer {
       if (c.req.method !== "GET") {
         return c.json({ error: "Only GET is supported" }, 405);
       }
+
       await next();
     });
 
     for (const [path, file] of this.files) {
       app.get(path, async (c) => {
         const bytes = await readFile(file.path);
+
         return c.body(bytes, 200, { "content-type": file.type, "cache-control": "no-cache" });
       });
     }
@@ -90,6 +93,7 @@ export class WebServer {
       const game = query.id("game");
       const search = query.search();
       const index = await indexes.get(game);
+
       return c.json(index.find(search));
     });
 
@@ -98,18 +102,21 @@ export class WebServer {
       const game = query.id("game");
       const product = query.id("product");
       const index = await indexes.get(game);
+
       return c.json({ card: index.card(product) });
     });
 
     app.get("/api/expansions", async (c) => {
       const game = new ApiQuery(c.req.query()).id("game");
       const index = await indexes.get(game);
+
       return c.json({ expansions: index.expansions });
     });
 
     app.get("/api/latest", async (c) => {
       const game = new ApiQuery(c.req.query()).id("game");
       const day = await catalog.latestDay(game);
+
       return c.json({ day });
     });
 
@@ -118,6 +125,7 @@ export class WebServer {
       const game = query.id("game");
       const product = query.id("product");
       const prices = await catalog.latestPrices(game, product);
+
       return c.json({ prices });
     });
 
@@ -127,6 +135,7 @@ export class WebServer {
       const product = query.id("product");
       const days = query.days();
       const prices = await catalog.dailyPrices(game, product, days);
+
       return c.json({ days: prices });
     });
 
@@ -139,10 +148,13 @@ export class WebServer {
       const index = await indexes.get(game);
       const card = index.card(product);
       const image = card ? await images.get(game, card, size) : null;
+
       if (!image) {
         return c.json({ error: "No image" }, 404);
       }
+
       const cacheControl = `max-age=${WebServer.imageCacheSeconds}`;
+
       return c.body(image.bytes, 200, { "content-type": image.type, "cache-control": cacheControl });
     });
 
@@ -153,7 +165,9 @@ export class WebServer {
       if (error instanceof HTTPException) {
         return c.json({ error: error.message }, error.status);
       }
+
       logger.warn(`${c.req.path} failed: ${error.message}`);
+
       return c.json({ error: "The server could not answer" }, 500);
     });
 
@@ -163,6 +177,7 @@ export class WebServer {
   /** Chart.js's browser build, from the installed package (its exports only expose the module builds). */
   private static chartJsPath(): string {
     const moduleEntry = fileURLToPath(import.meta.resolve("chart.js"));
+
     return join(dirname(moduleEntry), "chart.umd.min.js");
   }
 }

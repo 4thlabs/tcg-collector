@@ -27,6 +27,7 @@ export class ServeCommand {
         const app = this.app();
         const server = app.createWebServer();
         const port = await server.listen(Number(options.port), options.host);
+
         app.logger.info(`card page on http://${options.host}:${port}/`);
       });
   }

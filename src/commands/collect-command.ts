@@ -12,6 +12,7 @@ export class CollectCommand {
 
   register(program: Command): void {
     const defaultGames = process.env.GAMES ?? "all";
+
     program
       .command("collect")
       .description("collect the files of the requested games once")
@@ -21,6 +22,7 @@ export class CollectCommand {
         const games = GameSelection.parse(options.games);
         const collector = await app.createCollector();
         const report = await collector.collect(games);
+
         app.logger.info(report.summary());
         if (report.failures.length > 0) {
           process.exitCode = 1;

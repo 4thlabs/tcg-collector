@@ -28,11 +28,13 @@ export class FingerprintLedger {
       const text = await readFile(path, "utf8");
       const saved = JSON.parse(text) as Record<string, LedgerEntry>;
       const entries = new Map(Object.entries(saved));
+
       return new FingerprintLedger(path, entries);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return new FingerprintLedger(path, new Map());
       }
+
       throw error;
     }
   }
@@ -53,6 +55,7 @@ export class FingerprintLedger {
     const sorted = Object.fromEntries(keys.map((key) => [key, this.entries.get(key)]));
     const text = `${JSON.stringify(sorted, null, 2)}\n`;
     const temporary = `${this.path}.tmp`;
+
     await writeFile(temporary, text);
     await rename(temporary, this.path);
   }

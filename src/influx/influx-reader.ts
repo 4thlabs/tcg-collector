@@ -21,9 +21,11 @@ export class InfluxReader {
   async query(sql: string, params: QueryParams = {}): Promise<Row[]> {
     const rows: Row[] = [];
     const results = this.client.query(sql, this.database, { type: "sql", params });
+
     for await (const row of results) {
       rows.push(row);
     }
+
     return rows;
   }
 

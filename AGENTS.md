@@ -53,42 +53,65 @@ Prettier (`.prettierrc.json`) does the layout, ESLint (`eslint.config.js`) check
    }
    ```
 
-3. **No nested ternaries**, and no ternary inside a template literal: name the value first.
-4. **One fallback per expression**: not `a ?? b ?? c`.
-5. **No `reduce`**: a `for` loop with a named total says what it adds up.
-6. **Comments stay within 120 characters** too (Prettier does not wrap them).
-7. **No `console`**: log through the `Logger`. A command whose output *is* the result (the `games` table) disables the
+3. **Air between the parts of a function**: a blank line after the declarations, after every block (`if`, loop,
+   `try`), and before the `return`. Consecutive declarations stay together.
+
+   ```ts
+   static of(body: Buffer): string {
+     const text = body.toString("utf8");
+     const content = JSON.parse(text) as Record<string, unknown>;
+
+     for (const field of ContentFingerprint.volatileFields) {
+       delete content[field];
+     }
+
+     const canonical = JSON.stringify(content);
+     const hash = createHash("sha256");
+
+     hash.update(canonical);
+
+     return hash.digest("hex");
+   }
+   ```
+
+4. **No nested ternaries**, and no ternary inside a template literal: name the value first.
+5. **One fallback per expression**: not `a ?? b ?? c`.
+6. **No `reduce`**: a `for` loop with a named total says what it adds up.
+7. **Comments stay within 120 characters** too (Prettier does not wrap them).
+8. **No `console`**: log through the `Logger`. A command whose output *is* the result (the `games` table) disables the
    rule for its file and says why.
-8. `==` only as `== null`, which checks for null and undefined at once; `const` unless the value changes.
+9. `==` only as `== null`, which checks for null and undefined at once; `const` unless the value changes.
 
 ### Checked in review
 
-9. **One step per line.** A line does one thing. When a line parses *and* casts *and* filters, or hashes *and*
-   formats, split it and name each intermediate value: the names are the explanation.
+10. **One step per line.** A line does one thing. When a line parses *and* casts *and* filters, or hashes *and*
+    formats, split it and name each intermediate value: the names are the explanation.
 
-   ```ts
-   // Avoid
-   const json = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-   return createHash("sha256").update(JSON.stringify(json)).digest("hex");
+    ```ts
+    // Avoid
+    const json = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
+    return createHash("sha256").update(JSON.stringify(json)).digest("hex");
 
-   // Prefer
-   const text = body.toString("utf8");
-   const content = JSON.parse(text) as Record<string, unknown>;
-   const canonical = JSON.stringify(content);
-   const hash = createHash("sha256");
-   hash.update(canonical);
-   return hash.digest("hex");
-   ```
+    // Prefer
+    const text = body.toString("utf8");
+    const content = JSON.parse(text) as Record<string, unknown>;
+    const canonical = JSON.stringify(content);
+    const hash = createHash("sha256");
 
-10. **No call that does real work inside another call's arguments**: name its result first
+    hash.update(canonical);
+
+    return hash.digest("hex");
+    ```
+
+11. **No call that does real work inside another call's arguments**: name its result first
     (`const ledgerPath = join(dataDir, "ledger.json")`, then `open(ledgerPath)`). Trivial conversions (`String(id)`,
     `Number(value)`, `ErrorMessage.of(error)`) may stay inline.
-11. **Array chains of more than two steps** (`filter`, `map`, `sort`…) become named steps or a `for` loop.
-12. **A callback longer than one short expression** becomes a named function or method.
-13. **A builder or fluent chain** (InfluxDB `Point`, Commander, Hono) is written one call per line.
-14. **Flat functions**: check bad input first and return or throw early, then write the normal path without nesting.
+12. **Array chains of more than two steps** (`filter`, `map`, `sort`…) become named steps or a `for` loop.
+13. **A callback longer than one short expression** becomes a named function or method.
+14. **A builder or fluent chain** (InfluxDB `Point`, Commander, Hono) is written one call per line.
+15. **Flat functions**: check bad input first and return or throw early, then write the normal path without nesting.
     Read the input, then do the work: in an HTTP route, parse and check every parameter before querying anything.
-15. **No abstraction for a single use**, no options nobody passes, no code "for later".
+16. **No abstraction for a single use**, no options nobody passes, no code "for later".
 
 ## Names
 

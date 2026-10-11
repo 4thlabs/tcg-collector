@@ -63,6 +63,7 @@ class Cli {
       new ServeCommand(app),
       new GamesCommand(app),
     ];
+
     for (const command of commands) {
       command.register(this.program);
     }

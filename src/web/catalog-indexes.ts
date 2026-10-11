@@ -28,21 +28,27 @@ export class CatalogIndexes {
   /** Index of a game: built on the first call, then rebuilt in the background once it is old. */
   get(game: string): Promise<CatalogIndex> {
     const entry = this.entries.get(game);
+
     if (!entry) {
       return this.buildFirst(game);
     }
+
     const ageMs = this.now() - entry.since;
+
     if (ageMs > CatalogIndexes.maxAgeMs) {
       this.rebuildInBackground(game, entry);
     }
+
     return entry.index;
   }
 
   /** A failed first build is forgotten, so the next call tries again. */
   private buildFirst(game: string): Promise<CatalogIndex> {
     const index = this.build(game);
+
     this.entries.set(game, { index, since: this.now() });
     index.catch(() => this.entries.delete(game));
+
     return index;
   }
 
@@ -58,14 +64,18 @@ export class CatalogIndexes {
 
   private async build(game: string): Promise<CatalogIndex> {
     const started = this.now();
+
     try {
       const [products, trends] = await Promise.all([this.catalog.products(game), this.catalog.latestTrends(game)]);
       const index = new CatalogIndex(products, trends);
       const durationMs = this.now() - started;
+
       this.logger.info(`search index of game ${game}: ${index.size} products in ${durationMs} ms`);
+
       return index;
     } catch (error) {
       const message = ErrorMessage.of(error);
+
       this.logger.warn(`search index of game ${game} failed: ${message}`);
       throw error;
     }

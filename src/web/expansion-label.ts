@@ -29,18 +29,22 @@ export class ExpansionLabel {
   static fromSealedNames(names: readonly string[]): string | null {
     for (const pattern of [ExpansionLabel.fullSet, ExpansionLabel.raritySet]) {
       const match = ExpansionLabel.firstMatch(names, pattern);
+
       if (match) {
         return ExpansionLabel.clean(match[1]);
       }
     }
 
     const deckPrefixes = ExpansionLabel.deckPrefixes(names);
+
     if (deckPrefixes.length > 0) {
       const shortestPrefix = ExpansionLabel.shortest(deckPrefixes);
+
       return ExpansionLabel.clean(shortestPrefix);
     }
 
     const shared = ExpansionLabel.sharedWords(names);
+
     if (shared.length >= 4) {
       return shared;
     }
@@ -48,8 +52,10 @@ export class ExpansionLabel {
     if (names.length === 0) {
       return null;
     }
+
     const shortest = ExpansionLabel.shortest(names);
     const withoutPackaging = shortest.replace(ExpansionLabel.packaging, "");
+
     // A name that is only packaging ("Booster Box") keeps its full text.
     return ExpansionLabel.clean(withoutPackaging) || shortest;
   }
@@ -57,23 +63,29 @@ export class ExpansionLabel {
   private static firstMatch(names: readonly string[], pattern: RegExp): RegExpExecArray | null {
     for (const name of names) {
       const match = pattern.exec(name);
+
       if (match) {
         return match;
       }
     }
+
     return null;
   }
 
   /** "X" for each deck named X: "Deck name". */
   private static deckPrefixes(names: readonly string[]): string[] {
     const prefixes: string[] = [];
+
     for (const name of names) {
       const match = ExpansionLabel.deck.exec(name);
+
       if (!match) {
         continue;
       }
+
       prefixes.push(match[1]);
     }
+
     return prefixes;
   }
 
@@ -82,25 +94,32 @@ export class ExpansionLabel {
     if (names.length < 2) {
       return "";
     }
+
     const [first, ...others] = names.map((name) => name.split(" "));
     const shared: string[] = [];
+
     for (const [index, word] of first.entries()) {
       if (others.some((words) => words[index] !== word)) {
         break;
       }
+
       shared.push(word);
     }
+
     const withoutSeparator = shared.join(" ").replace(/[:\-–]$/, "");
+
     return ExpansionLabel.clean(withoutSeparator);
   }
 
   private static shortest(names: readonly string[]): string {
     let shortest = names[0];
+
     for (const name of names) {
       if (name.length < shortest.length) {
         shortest = name;
       }
     }
+
     return shortest;
   }
 

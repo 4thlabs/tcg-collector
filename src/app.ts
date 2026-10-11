@@ -45,6 +45,7 @@ export class App {
   async createCollector(): Promise<Collector> {
     const ledgerPath = join(this.options.dataDir, "ledger.json");
     const ledger = await FingerprintLedger.open(ledgerPath);
+
     return new Collector(this.client, ledger, this.archive(), this.logger);
   }
 
@@ -52,9 +53,11 @@ export class App {
   async withImporter<T>(task: (importer: InfluxImporter) => Promise<T>): Promise<T> {
     const writer = new InfluxWriter(this.influxSettings());
     const reader = new InfluxReader(this.influxSettings());
+
     try {
       // The ledger lives in the database: a wiped database is rebuilt from the archives by the next import.
       const ledger = await ImportLedger.load(reader);
+
       return await task(new InfluxImporter(this.archive(), ledger, writer, this.logger));
     } finally {
       await Promise.all([writer.close(), reader.close()]);
@@ -73,6 +76,7 @@ export class App {
       ["21", new SwuImages(http)],
     ]);
     const imageFolder = join(this.options.dataDir, "images");
+
     return new WebServer({
       catalog,
       indexes: new CatalogIndexes(catalog, this.logger),
@@ -85,17 +89,21 @@ export class App {
   private influxSettings(): InfluxSettings {
     const { influxUrl, influxDatabase } = this.options;
     const token = process.env.INFLUX_TOKEN;
+
     if (!influxUrl) {
       throw new Error("No InfluxDB URL: set --influx-url or INFLUX_URL");
     }
+
     if (!token) {
       throw new Error("No InfluxDB token: set INFLUX_TOKEN");
     }
+
     return { url: influxUrl, database: influxDatabase, token };
   }
 
   private archive(): SnapshotArchive {
     const archiveFolder = join(this.options.dataDir, "archive");
+
     return new SnapshotArchive(archiveFolder);
   }
 }

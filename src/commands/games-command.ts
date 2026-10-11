@@ -21,19 +21,25 @@ export class GamesCommand {
       .option("-g, --games <ids>", 'games to probe: "all" or a list such as "1,6,21"', "all")
       .action(async (options: { games: string }) => {
         const client = this.app().client;
+
         console.log(["game", ...FeedKind.all.map((kind) => kind.name)].join("\t"));
         let total = 0;
+
         for (const idGame of GameSelection.parse(options.games).ids) {
           const sizes = await GamesCommand.fileSizes(client, idGame);
+
           // A game id without any file is not a published game.
           if (sizes.every((size) => size === undefined)) {
             continue;
           }
+
           for (const size of sizes) {
             total += size ?? 0;
           }
+
           console.log([idGame, ...sizes.map(GamesCommand.megabytes)].join("\t"));
         }
+
         console.log(`Uncompressed total: ${GamesCommand.megabytes(total)}`);
       });
   }
@@ -42,6 +48,7 @@ export class GamesCommand {
   private static async fileSizes(client: CardmarketClient, idGame: number): Promise<(number | undefined)[]> {
     const files = FeedKind.all.map((kind) => new FeedFile(kind, idGame));
     const versions = await Promise.all(files.map((file) => client.probe(file)));
+
     return versions.map((version) => version?.size);
   }
 

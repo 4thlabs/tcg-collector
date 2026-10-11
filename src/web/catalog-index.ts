@@ -61,10 +61,13 @@ export class CatalogIndex {
     const labels = CatalogIndex.expansionLabels(products);
     const trendsByProduct = new Map(trends.map((trend) => [trend.product, trend]));
     const cards: CardEntry[] = [];
+
     for (const record of products) {
       const trend = trendsByProduct.get(record.product);
+
       cards.push(CatalogIndex.toCard(record, labels, trend));
     }
+
     CatalogIndex.numberVersions(cards);
 
     this.cards = new Map(cards.map((card) => [card.product, card]));
@@ -94,6 +97,7 @@ export class CatalogIndex {
 
     let matches: CardEntry[];
     let sort = request.sort;
+
     if (text) {
       matches = this.matches(text, filter);
     } else {
@@ -103,9 +107,11 @@ export class CatalogIndex {
         sort = "newest";
       }
     }
+
     CatalogIndex.sort(matches, sort);
 
     const page = matches.slice(request.offset, request.offset + request.limit);
+
     return { total: matches.length, cards: page };
   }
 
@@ -115,28 +121,36 @@ export class CatalogIndex {
    */
   private matches(text: string, filter: (card: CardEntry) => boolean): CardEntry[] {
     let hits = this.search.search(text);
+
     if (hits.length === 0) {
       hits = this.search.search(text, { fuzzy: 0.2 });
     }
 
     const found: ScoredCard[] = [];
+
     for (const hit of hits) {
       const card = this.cards.get(String(hit.id));
+
       if (!card || !filter(card)) {
         continue;
       }
+
       found.push({ card, score: hit.score });
     }
+
     found.sort((a, b) => b.score - a.score || CatalogIndex.newestFirst(a.card, b.card));
+
     return found.map((hit) => hit.card);
   }
 
   /** A product as the list shows it; its version is numbered later, once all the cards are known. */
   private static toCard(record: ProductRecord, labels: Map<number, string>, trend: TrendRecord | undefined): CardEntry {
     let expansion: string | null = null;
+
     if (record.expansionId !== null) {
       expansion = labels.get(record.expansionId) ?? null;
     }
+
     return {
       product: record.product,
       name: record.name,
@@ -154,10 +168,12 @@ export class CatalogIndex {
   /** Same name in the same expansion: numbers the versions by idProduct, the order Cardmarket uses for V.1, V.2… */
   private static numberVersions(cards: CardEntry[]): void {
     const groups = Map.groupBy(cards, (card) => `${card.expansionId}/${card.name}`);
+
     for (const group of groups.values()) {
       if (group.length < 2) {
         continue;
       }
+
       group.sort((a, b) => Number(a.product) - Number(b.product));
       for (const [index, card] of group.entries()) {
         card.version = index + 1;
@@ -174,23 +190,28 @@ export class CatalogIndex {
     if (request.expansionId !== undefined && card.expansionId !== request.expansionId) {
       return false;
     }
+
     if (request.kind === "single" && !card.single) {
       return false;
     }
+
     if (request.kind === "sealed" && card.single) {
       return false;
     }
+
     // A price filter leaves out the cards without a trend price.
     if (request.minTrend !== undefined) {
       if (card.trend === null || card.trend < request.minTrend) {
         return false;
       }
     }
+
     if (request.maxTrend !== undefined) {
       if (card.trend === null || card.trend > request.maxTrend) {
         return false;
       }
     }
+
     return true;
   }
 
@@ -210,76 +231,96 @@ export class CatalogIndex {
     if (a.trend === null && b.trend === null) {
       return 0;
     }
+
     if (a.trend === null) {
       return 1;
     }
+
     if (b.trend === null) {
       return -1;
     }
+
     return direction * (a.trend - b.trend);
   }
 
   /** Most recently added first; between products added the same day, the highest idProduct first. */
   private static newestFirst(a: CardEntry, b: CardEntry): number {
     const byDate = (b.added ?? "").localeCompare(a.added ?? "");
+
     if (byDate !== 0) {
       return byDate;
     }
+
     return Number(b.product) - Number(a.product);
   }
 
   /** Label of each expansion, from the names of its sealed products. */
   private static expansionLabels(products: readonly ProductRecord[]): Map<number, string> {
     const sealedNames = new Map<number, string[]>();
+
     for (const record of products) {
       if (record.expansionId === null || CatalogIndex.isSingle(record.category)) {
         continue;
       }
+
       const names = sealedNames.get(record.expansionId) ?? [];
+
       names.push(record.name);
       sealedNames.set(record.expansionId, names);
     }
 
     const labels = new Map<number, string>();
+
     for (const [id, names] of sealedNames) {
       const label = ExpansionLabel.fromSealedNames(names);
+
       if (!label) {
         continue;
       }
+
       labels.set(id, label);
     }
+
     return labels;
   }
 
   /** Expansions with a name, most recent first, for the filter. */
   private static expansionOptions(cards: readonly CardEntry[]): ExpansionOption[] {
     const options = new Map<number, ExpansionOption>();
+
     for (const card of cards) {
       if (card.expansionId === null || card.expansion === null) {
         continue;
       }
+
       let option = options.get(card.expansionId);
+
       if (!option) {
         option = { id: card.expansionId, label: card.expansion, added: null, count: 0 };
         options.set(card.expansionId, option);
       }
+
       option.count++;
       if (!card.added) {
         continue;
       }
+
       if (option.added === null || card.added > option.added) {
         option.added = card.added;
       }
     }
+
     return [...options.values()].sort(CatalogIndex.newestExpansionFirst);
   }
 
   /** Most recently added first; then by label. */
   private static newestExpansionFirst(a: ExpansionOption, b: ExpansionOption): number {
     const byDate = (b.added ?? "").localeCompare(a.added ?? "");
+
     if (byDate !== 0) {
       return byDate;
     }
+
     return a.label.localeCompare(b.label);
   }
 }

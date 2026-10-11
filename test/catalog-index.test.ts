@@ -87,6 +87,7 @@ test("filters by expansion, type and trend price", () => {
 test("sorts by trend with unpriced products last, and pages", () => {
   assert.deepEqual(find({ text: "sol ring", sort: "trend-asc" }), ["910771", "906534", "906535", "15451", "906536"]);
   const page = index.find({ text: "sol ring", kind: "all", sort: "trend-desc", offset: 1, limit: 2 });
+
   assert.equal(page.total, 5);
   assert.deepEqual(
     page.cards.map((card) => card.product),

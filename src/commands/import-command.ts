@@ -19,6 +19,7 @@ export class ImportCommand {
   register(program: Command): void {
     // The games collected by default are also the games imported by default.
     const defaultGames = process.env.IMPORT_GAMES ?? process.env.GAMES;
+
     program
       .command("import")
       .description("import the archived catalogues and price guides into InfluxDB")
@@ -26,6 +27,7 @@ export class ImportCommand {
       .option("--replay", "import every archive again, not only the new ones", false)
       .action(async (options: ImportOptions) => {
         const games = GameSelection.parse(options.games);
+
         await this.app().withImporter((importer) => importer.import(games, options.replay));
       });
   }

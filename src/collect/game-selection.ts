@@ -13,15 +13,20 @@ export class GameSelection {
   /** "all" (or empty) = ids 1 to defaultMaxGameId, otherwise a list such as "1,6,21". */
   static parse(value: string | undefined): GameSelection {
     const text = (value ?? "").trim();
+
     if (text === "" || text === "all") {
       return GameSelection.upTo(GameSelection.defaultMaxGameId);
     }
+
     const ids = text.split(",").map((part) => Number(part.trim()));
     const invalid = ids.filter((id) => !Number.isInteger(id) || id < 1);
+
     if (invalid.length > 0) {
       throw new Error(`Invalid game ids: "${value}"`);
     }
+
     const unique = [...new Set(ids)];
+
     return new GameSelection(unique.sort((a, b) => a - b));
   }
 

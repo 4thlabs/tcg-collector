@@ -12,7 +12,9 @@ export class LoggerFactory {
     if (!(LoggerFactory.levels as readonly string[]).includes(level)) {
       throw new Error(`Invalid log level: "${level}" (expected: ${LoggerFactory.levels.join(", ")})`);
     }
+
     const lineFormat = format === "json" ? winston.format.json() : LoggerFactory.textFormat();
+
     return winston.createLogger({
       level,
       format: winston.format.combine(winston.format.timestamp(), lineFormat),

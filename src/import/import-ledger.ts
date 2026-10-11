@@ -23,8 +23,10 @@ export class ImportLedger {
   /** Reads the last imported day of each file; empty when the database or the table does not exist yet. */
   static async load(reader: InfluxReader): Promise<ImportLedger> {
     const lastDays = new Map<string, string>();
+
     try {
       const rows = await reader.query(`SELECT file, max(time) AS day FROM ${ImportLedger.table} GROUP BY file`);
+
       for (const row of rows) {
         lastDays.set(String(row.file), InfluxDay.of(row.day));
       }
@@ -33,6 +35,7 @@ export class ImportLedger {
         throw error;
       }
     }
+
     return new ImportLedger(lastDays);
   }
 
@@ -64,6 +67,7 @@ export class ImportLedger {
    */
   private static isMissing(error: unknown): boolean {
     const message = ErrorMessage.of(error);
+
     return /database not found|table '[^']*' not found/.test(message);
   }
 }

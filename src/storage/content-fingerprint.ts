@@ -12,12 +12,16 @@ export class ContentFingerprint {
   static of(body: Buffer): string {
     const text = body.toString("utf8");
     const content = JSON.parse(text) as Record<string, unknown>;
+
     for (const field of ContentFingerprint.volatileFields) {
       delete content[field];
     }
+
     const canonical = JSON.stringify(content);
     const hash = createHash("sha256");
+
     hash.update(canonical);
+
     return hash.digest("hex");
   }
 }

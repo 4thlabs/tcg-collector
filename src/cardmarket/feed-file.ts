@@ -17,10 +17,13 @@ export class FeedKind {
 
   static byName(name: string): FeedKind {
     const kind = FeedKind.all.find((known) => known.name === name);
+
     if (kind) {
       return kind;
     }
+
     const expected = FeedKind.all.map((known) => known.name).join(", ");
+
     throw new Error(`Unknown file type: ${name} (expected: ${expected})`);
   }
 

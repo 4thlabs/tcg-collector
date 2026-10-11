@@ -1,5 +1,6 @@
 // Lint rules: the rules of AGENTS.md that a tool can check. Prettier does the formatting (.prettierrc.json).
 import js from "@eslint/js";
+import stylistic from "@stylistic/eslint-plugin";
 import { defineConfig } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -33,6 +34,20 @@ const readability = {
   ],
 };
 
+/** "Air" in AGENTS.md: blank lines split a function into declarations, work and result. */
+const spacing = {
+  "@stylistic/padding-line-between-statements": [
+    "error",
+    // A blank line after the declarations; consecutive declarations stay together.
+    { blankLine: "always", prev: ["const", "let", "var"], next: "*" },
+    { blankLine: "any", prev: ["const", "let", "var"], next: ["const", "let", "var"] },
+    // A blank line after every block: if, loop, try, switch, function.
+    { blankLine: "always", prev: "block-like", next: "*" },
+    // A blank line before the result.
+    { blankLine: "always", prev: "*", next: "return" },
+  ],
+};
+
 /** Other rules from AGENTS.md. */
 const conventions = {
   // Log through the Logger; the rare output meant for stdout says so with an eslint-disable comment.
@@ -55,5 +70,8 @@ export default defineConfig(
     files: ["web/**/*.js"],
     languageOptions: { sourceType: "script", globals: globals.browser },
   },
-  { rules: { ...readability, ...conventions } },
+  {
+    plugins: { "@stylistic": stylistic },
+    rules: { ...readability, ...spacing, ...conventions },
+  },
 );

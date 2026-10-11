@@ -25,12 +25,14 @@ export class PoliteHttp {
   /** GET once a request slot is free; 404 is an answer, not an error. */
   async get(url: string, options: Options = {}): Promise<Response> {
     await this.waitForSlot();
+
     return this.http.get(url, { ...options, throwHttpErrors: (status) => status !== 404 });
   }
 
   private async waitForSlot(): Promise<void> {
     const now = Date.now();
     const start = Math.max(now, this.nextSlot);
+
     this.nextSlot = start + this.spacingMs;
     if (start > now) {
       await new Promise((resolve) => setTimeout(resolve, start - now));

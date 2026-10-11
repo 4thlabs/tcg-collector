@@ -42,16 +42,21 @@ export class InfluxImporter {
   async import(games: GameSelection, replay = false): Promise<ImportSummary> {
     const started = Date.now();
     const summary: ImportSummary = { files: 0, points: 0 };
+
     for (const idGame of games.ids) {
       for (const kind of importedKinds) {
         const file = new FeedFile(kind, idGame);
         const imported = await this.importFile(file, replay);
+
         summary.files += imported.files;
         summary.points += imported.points;
       }
     }
+
     const seconds = Math.round((Date.now() - started) / 1000);
+
     this.logger.info(`Import finished in ${seconds} s: ${summary.files} files, ${summary.points} points`);
+
     return summary;
   }
 
@@ -61,6 +66,7 @@ export class InfluxImporter {
     const lastDay = replay ? undefined : this.ledger.lastDay(file.key);
     const archivedDays = await this.archive.days(file);
     const days = archivedDays.filter((day) => lastDay === undefined || day > lastDay);
+
     if (days.length === 0) {
       return imported;
     }
@@ -68,12 +74,14 @@ export class InfluxImporter {
     for await (const [day, points] of this.pointsByDay(file, days, lastDay)) {
       // The log entry goes last, with the day's points: an interrupted import resumes where it stopped.
       const logEntry = this.ledger.entry(file.key, file.idGame, day, points.length);
+
       await this.writer.write([...points, logEntry]);
       this.ledger.record(file.key, day);
       imported.files++;
       imported.points += points.length;
       this.logger.info(`imported ${file.key} ${day} (${points.length} points)`);
     }
+
     return imported;
   }
 
@@ -81,6 +89,7 @@ export class InfluxImporter {
     if (file.kind === FeedKind.priceGuide) {
       return this.pricePoints(file, days);
     }
+
     return this.productPoints(file, days, lastDay);
   }
 
@@ -89,13 +98,17 @@ export class InfluxImporter {
     for (const day of days) {
       const content = await this.archive.read<PriceGuideContent>(file, day);
       const points: Point[] = [];
+
       for (const entry of content.priceGuides) {
         const point = PricePointFactory.create(entry, file.idGame, day);
+
         if (!point) {
           continue;
         }
+
         points.push(point);
       }
+
       yield [day, points];
     }
   }
@@ -110,6 +123,7 @@ export class InfluxImporter {
     lastDay: string | undefined,
   ): AsyncGenerator<DayPoints> {
     let previous = new Map<number, ProductEntry>();
+
     if (lastDay !== undefined) {
       previous = await this.productsOn(file, lastDay);
     }
@@ -117,13 +131,17 @@ export class InfluxImporter {
     for (const day of days) {
       const current = await this.productsOn(file, day);
       const points: Point[] = [];
+
       for (const entry of current.values()) {
         const before = previous.get(entry.idProduct);
+
         if (!ProductPointFactory.changed(entry, before)) {
           continue;
         }
+
         points.push(ProductPointFactory.create(entry, file.idGame, day));
       }
+
       previous = current;
       yield [day, points];
     }
@@ -133,9 +151,11 @@ export class InfluxImporter {
   private async productsOn(file: FeedFile, day: string): Promise<Map<number, ProductEntry>> {
     const content = await this.archive.read<ProductListContent>(file, day);
     const products = new Map<number, ProductEntry>();
+
     for (const product of content.products) {
       products.set(product.idProduct, product);
     }
+
     return products;
   }
 }

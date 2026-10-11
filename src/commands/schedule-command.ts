@@ -28,6 +28,7 @@ export class ScheduleCommand {
   register(program: Command): void {
     const defaultTime = process.env.COLLECT_AT ?? ScheduleCommand.defaultTime;
     const defaultGames = process.env.GAMES ?? "all";
+
     program
       .command("schedule")
       .description("collect every day at a fixed time (UTC), without stopping")
@@ -46,15 +47,19 @@ export class ScheduleCommand {
         const collect = async () => {
           const collector = await app.createCollector();
           const report = await collector.collect(games);
+
           app.logger.info(report.summary());
           if (app.influxConfigured) {
             await app.withImporter((importer) => importer.import(importGames));
           }
         };
+
         const scheduler = new DailyScheduler(options.at, collect, app.logger);
+
         if (options.runNow) {
           await scheduler.runOnce();
         }
+
         await scheduler.runForever();
       });
   }
